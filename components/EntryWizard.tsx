@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
@@ -80,6 +80,11 @@ export function EntryWizard({ id }: { id: string }) {
   const [exportUrl, setExportUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const lastSavedDraftRef = useRef<{ title_fr: string; draft_fr: string } | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoTranslateInFlightRef = useRef(false);
+  const autoRewriteInFlightRef = useRef(false);
 
   const draftEditable = useMemo(
     () => entry?.status === 'DRAFT_FR' || entry?.status === 'JP_AUTO_READY',
@@ -99,6 +104,7 @@ export function EntryWizard({ id }: { id: string }) {
     setEntry(entryData);
     setMemos(memoData.memos);
     setJpIntentDraft(entryData.jp_auto ?? '');
+    lastSavedDraftRef.current = { title_fr: entryData.title_fr, draft_fr: entryData.draft_fr };
 
     if (entryData.final_fr) {
       const diff = await apiFetch<{
@@ -122,9 +128,37 @@ export function EntryWizard({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, router]);
 
-  async function updateDraftFields() {
+  useEffect(() => {
     if (!entry || !draftEditable) return;
-    setBusy(true);
+    if (!entry.title_fr.trim() || !entry.draft_fr.trim()) return;
+    if (
+      lastSavedDraftRef.current &&
+      lastSavedDraftRef.current.title_fr === entry.title_fr &&
+      lastSavedDraftRef.current.draft_fr === entry.draft_fr
+    ) {
+      return;
+    }
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = setTimeout(() => {
+      void updateDraftFields({ autoTranslate: true, silent: true });
+    }, 800);
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [entry, draftEditable]);
+
+  async function updateDraftFields(options?: { autoTranslate?: boolean; silent?: boolean }) {
+    if (!entry || !draftEditable) return;
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setBusy(true);
+    } else {
+      setDraftSaving(true);
+    }
     setError(null);
     try {
       const updated = await apiFetch<Entry>(`/api/entries/${id}`, {
@@ -132,14 +166,26 @@ export function EntryWizard({ id }: { id: string }) {
         body: JSON.stringify({ title_fr: entry.title_fr, draft_fr: entry.draft_fr })
       });
       setEntry(updated);
+      lastSavedDraftRef.current = { title_fr: updated.title_fr, draft_fr: updated.draft_fr };
+      if (options?.autoTranslate && updated.status === 'DRAFT_FR') {
+        await translate({ auto: true });
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      if (!silent) {
+        setBusy(false);
+      } else {
+        setDraftSaving(false);
+      }
     }
   }
 
-  async function translate() {
+  async function translate(options?: { auto?: boolean }) {
+    if (options?.auto && autoTranslateInFlightRef.current) return;
+    if (options?.auto) {
+      autoTranslateInFlightRef.current = true;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -153,6 +199,7 @@ export function EntryWizard({ id }: { id: string }) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+      autoTranslateInFlightRef.current = false;
     }
   }
 
@@ -165,6 +212,9 @@ export function EntryWizard({ id }: { id: string }) {
         body: JSON.stringify({ jp_intent: jpIntentDraft })
       });
       setEntry(updated);
+      if (updated.status === 'JP_INTENT_LOCKED') {
+        await rewrite({ auto: true });
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -172,7 +222,11 @@ export function EntryWizard({ id }: { id: string }) {
     }
   }
 
-  async function rewrite() {
+  async function rewrite(options?: { auto?: boolean }) {
+    if (options?.auto && autoRewriteInFlightRef.current) return;
+    if (options?.auto) {
+      autoRewriteInFlightRef.current = true;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -186,6 +240,7 @@ export function EntryWizard({ id }: { id: string }) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+      autoRewriteInFlightRef.current = false;
     }
   }
 
@@ -319,9 +374,14 @@ export function EntryWizard({ id }: { id: string }) {
               disabled={!draftEditable || busy}
             />
           </label>
-          <button type="button" onClick={updateDraftFields} disabled={!draftEditable || busy}>
+          <button
+            type="button"
+            onClick={() => updateDraftFields({ autoTranslate: true })}
+            disabled={!draftEditable || busy}
+          >
             下書きを保存
           </button>
+          {draftSaving ? <p className="badge">自動保存中...</p> : null}
           {entry.status !== 'DRAFT_FR' && entry.status !== 'JP_AUTO_READY' ? (
             <p className="badge">ロック後は編集できません</p>
           ) : null}
@@ -329,7 +389,7 @@ export function EntryWizard({ id }: { id: string }) {
 
         <div className="card">
           <h3>ステップ3: JP自動翻訳</h3>
-          <button type="button" onClick={translate} disabled={!draftEditable || busy}>
+          <button type="button" onClick={() => void translate()} disabled={!draftEditable || busy}>
             FRからJPへ翻訳
           </button>
           <textarea rows={6} value={entry.jp_auto ?? ''} readOnly />
