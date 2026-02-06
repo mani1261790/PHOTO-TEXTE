@@ -1,6 +1,20 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+import { getAccessToken } from '@/lib/auth/token-store';
 
 export function TopNav() {
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    const syncAuth = () => setIsAuthed(Boolean(getAccessToken()));
+    syncAuth();
+    window.addEventListener('storage', syncAuth);
+    return () => window.removeEventListener('storage', syncAuth);
+  }, []);
+
   return (
     <header className="topnav">
       <div className="topnav-inner">
@@ -10,13 +24,18 @@ export function TopNav() {
           </span>
           <span>
             <strong>PHOTO-TEXTE</strong>
-            <small>Visual Writing Studio</small>
+            <small>Atelier de rédaction visuelle</small>
           </span>
         </Link>
         <nav className="topnav-links" aria-label="主要メニュー">
-          <Link href="/entries">エントリー</Link>
-          <Link href="/entries/new">新規エントリー作成</Link>
-          <Link href="/settings">設定</Link>
+          {isAuthed ? (
+            <>
+              <Link href="/entries">エントリー一覧</Link>
+              <Link href="/settings">設定</Link>
+            </>
+          ) : (
+            <Link href="/login">ログイン・新規登録</Link>
+          )}
         </nav>
       </div>
     </header>

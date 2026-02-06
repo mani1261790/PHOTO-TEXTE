@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
+import { getAccessToken } from '@/lib/auth/token-store';
 
 type EntryItem = {
   id: string;
@@ -18,6 +20,7 @@ const inProgress = new Set(['DRAFT_FR', 'JP_AUTO_READY', 'JP_INTENT_LOCKED']);
 const done = new Set(['FINAL_FR_READY', 'EXPORTED']);
 
 export default function EntriesPage() {
+  const router = useRouter();
   const [entries, setEntries] = useState<EntryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const statusLabel: Record<string, string> = {
@@ -29,10 +32,15 @@ export default function EntriesPage() {
   };
 
   useEffect(() => {
+    if (!getAccessToken()) {
+      router.replace('/login');
+      return;
+    }
+
     apiFetch<{ entries: EntryItem[] }>('/api/entries')
       .then((res) => setEntries(res.entries))
       .catch((err) => setError(err.message));
-  }, []);
+  }, [router]);
 
   const inProgressEntries = useMemo(
     () => entries.filter((entry) => inProgress.has(entry.status)),

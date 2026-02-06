@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+
 :root {
   --theme-primary: #127475;
   --theme-primary-pressed: #0f6263;
@@ -29,13 +31,15 @@ body {
 }
 
 body {
-  font-family: 'Avenir Next', 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+  font-family: 'Manrope', 'Avenir Next', 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
   background:
     radial-gradient(circle at 8% -4%, #ffe8cf 0, transparent 34%),
     radial-gradient(circle at 90% 8%, #dff3f2 0, transparent 32%),
     var(--theme-bg);
   color: var(--theme-ink);
   line-height: 1.5;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
 }
 
 main {
@@ -60,7 +64,8 @@ h4,
 h5,
 h6 {
   margin-top: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  font-family: 'Playfair Display', 'Hiragino Mincho ProN', serif;
 }
 
 p {
@@ -94,6 +99,12 @@ p {
   text-decoration: none;
 }
 
+.brand strong {
+  font-family: 'Playfair Display', 'Hiragino Mincho ProN', serif;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .brand:hover {
   text-decoration: none;
 }
@@ -102,6 +113,8 @@ p {
   display: block;
   color: var(--theme-subtle);
   font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .brand-mark {
@@ -317,6 +330,12 @@ button[disabled] {
 .hero {
   border: 1px solid #bfe7e5;
   background: linear-gradient(145deg, #ffffff, #effaf8);
+}
+
+.hero-lead {
+  font-size: 16px;
+  line-height: 1.7;
+  color: #3b4a5a;
 }
 
 .hero-title-row {

@@ -1,9 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 import { apiFetch, apiFetchForm } from '@/lib/api/fetcher';
+import { getAccessToken } from '@/lib/auth/token-store';
 
 export default function NewEntryPage() {
   const router = useRouter();
@@ -12,6 +13,12 @@ export default function NewEntryPage() {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!getAccessToken()) {
+      router.replace('/login');
+    }
+  }, [router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
