@@ -14,9 +14,6 @@ type EntryItem = {
   updated_at: string;
 };
 
-const inProgress = new Set(['DRAFT_FR', 'JP_AUTO_READY', 'JP_INTENT_LOCKED']);
-const done = new Set(['FINAL_FR_READY', 'EXPORTED']);
-
 export default function EntriesPage() {
   const [entries, setEntries] = useState<EntryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -34,13 +31,8 @@ export default function EntriesPage() {
       .catch((err) => setError(err.message));
   }, []);
 
-  const inProgressEntries = useMemo(
-    () => entries.filter((entry) => inProgress.has(entry.status)),
-    [entries]
-  );
-
-  const doneEntries = useMemo(
-    () => entries.filter((entry) => done.has(entry.status)),
+  const orderedEntries = useMemo(
+    () => [...entries].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
     [entries]
   );
 
@@ -84,23 +76,23 @@ export default function EntriesPage() {
       <div className="card panel-highlight">
         <div className="section-head">
           <h1>エントリー一覧</h1>
-          <Link href="/entries/new" className="fab-add" aria-label="新規エントリー作成">
-            +
-          </Link>
         </div>
-        <p>作業中と完了済みを分けて表示しています。</p>
       </div>
+
+      <Link href="/entries/new" className="fab-add" aria-label="新規エントリー作成">
+        <span className="fab-add-icon" aria-hidden>
+          ＋
+        </span>
+        <span className="fab-add-text">新規</span>
+      </Link>
 
       {error ? <p className="error">{error}</p> : null}
 
       <div className="card">
-        <h3>作業中</h3>
-        {inProgressEntries.length ? inProgressEntries.map(renderEntry) : <p>作業中のエントリーはありません。</p>}
-      </div>
-
-      <div className="card">
-        <h3>完了済み</h3>
-        {doneEntries.length ? doneEntries.map(renderEntry) : <p>完了済みエントリーはありません。</p>}
+        <h3>すべてのエントリー</h3>
+        <div className="entry-list">
+          {orderedEntries.length ? orderedEntries.map(renderEntry) : <p>エントリーはまだありません。</p>}
+        </div>
       </div>
     </div>
   );
