@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
+import { getAccessToken } from '@/lib/auth/token-store';
 import { DiffToken } from '@/lib/diff/read-only';
 
 import { DiffReadOnly } from '@/components/DiffReadOnly';
@@ -112,9 +113,14 @@ export function EntryWizard({ id }: { id: string }) {
   }
 
   useEffect(() => {
+    if (!getAccessToken()) {
+      router.replace('/login');
+      return;
+    }
+
     loadEntry().catch((err) => setError(err.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, router]);
 
   async function updateDraftFields() {
     if (!entry || !draftEditable) return;
