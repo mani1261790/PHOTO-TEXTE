@@ -15,9 +15,7 @@ export function TopNav() {
         </Link>
         <nav className="topnav-links" aria-label="主要メニュー">
           <Link href="/entries">エントリー</Link>
-          <Link href="/entries/new">新規作成</Link>
           <Link href="/settings">設定</Link>
-          <Link href="/login">ログイン</Link>
         </nav>
       </div>
     </header>

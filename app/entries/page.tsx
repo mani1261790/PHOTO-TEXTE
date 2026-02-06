@@ -34,9 +34,8 @@ export default function EntriesPage() {
       <div className="card panel-highlight">
         <div className="section-head">
           <h1>エントリー一覧</h1>
-          <span className="info-chip">次アクションが見える</span>
         </div>
-        <p>迷ったら「未完了のエントリー」を開いて続きから進めてください。</p>
+        <p>未完了のエントリーを開いて、続きから作業できます。</p>
         <div className="actions-row">
           <Link href="/entries/new" className="badge">
             新規エントリー作成

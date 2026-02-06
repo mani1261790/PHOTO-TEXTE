@@ -21,7 +21,6 @@ export default function Home() {
       <div className="card">
         <div className="section-head">
           <h2>使い方（3ステップ）</h2>
-          <span className="info-chip">迷わない導線</span>
         </div>
         <div className="flow-grid">
           <div className="flow-box">
