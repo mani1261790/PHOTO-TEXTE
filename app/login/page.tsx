@@ -49,53 +49,58 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="card">
-      <h1>{mode === 'login' ? 'ログイン' : '新規登録'}</h1>
-      <p>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-        >
-          {mode === 'login' ? '新規登録に切り替え' : 'ログインに切り替え'}
-        </button>
-      </p>
-      <form onSubmit={onSubmit}>
-        <label>
-          メールアドレス
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          パスワード
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-            required
-          />
-        </label>
-        {mode === 'signup' ? (
+    <div>
+      <div className="card panel-highlight">
+        <h1>{mode === 'login' ? 'ログイン' : '新規登録'}</h1>
+        <p>ログイン後は「設定 → 新規エントリー作成」の順で進めるのがおすすめです。</p>
+      </div>
+      <div className="card">
+        <p>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+          >
+            {mode === 'login' ? '新規登録に切り替え' : 'ログインに切り替え'}
+          </button>
+        </p>
+        <form onSubmit={onSubmit}>
           <label>
-            表示名（任意）
+            メールアドレス
             <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              maxLength={80}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
             />
           </label>
-        ) : null}
-        <button type="submit">{mode === 'login' ? 'ログイン' : 'アカウント作成'}</button>
-      </form>
-      {error ? <p className="error">{error}</p> : null}
-      <p>
-        <Link href="/entries">エントリー一覧へ</Link>
-      </p>
+          <label>
+            パスワード
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
+              required
+            />
+          </label>
+          {mode === 'signup' ? (
+            <label>
+              表示名（任意）
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={80}
+              />
+            </label>
+          ) : null}
+          <button type="submit">{mode === 'login' ? 'ログイン' : 'アカウント作成'}</button>
+        </form>
+        {error ? <p className="error">{error}</p> : null}
+        <p>
+          <Link href="/entries">エントリー一覧へ</Link>
+        </p>
+      </div>
     </div>
   );
 }

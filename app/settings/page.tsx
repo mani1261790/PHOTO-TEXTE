@@ -68,70 +68,80 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="card">
-      <h1>設定</h1>
-      <form onSubmit={onSubmit}>
-        <label>
-          表示名
-          <input
-            value={profile.display_name ?? ''}
-            onChange={(e) => setProfile({ ...profile, display_name: e.target.value || null })}
-          />
-        </label>
-        <label>
-          文法上の性
-          <select
-            value={profile.grammatical_gender}
-            onChange={(e) =>
-              setProfile({ ...profile, grammatical_gender: e.target.value as Profile['grammatical_gender'] })
-            }
-          >
-            <option value="male">男性</option>
-            <option value="female">女性</option>
-            <option value="neutral">中性</option>
-            <option value="auto">自動</option>
-          </select>
-        </label>
-        <label>
-          CEFRレベル
-          <select
-            value={profile.cefr_level}
-            onChange={(e) =>
-              setProfile({ ...profile, cefr_level: e.target.value as Profile['cefr_level'] })
-            }
-          >
-            <option>A1</option>
-            <option>A2</option>
-            <option>B1</option>
-            <option>B2</option>
-            <option>C1</option>
-            <option>C2</option>
-          </select>
-        </label>
-        <label>
-          丁寧さ（任意）
-          <input
-            value={profile.politeness_pref ?? ''}
-            onChange={(e) => setProfile({ ...profile, politeness_pref: e.target.value || null })}
-            placeholder="tu / vous など"
-          />
-        </label>
-        <button type="submit" disabled={saving}>
-          {saving ? '保存中...' : '設定を保存'}
+    <div>
+      <div className="card panel-highlight">
+        <h1>設定</h1>
+        <p>学習スタイルに合わせてAI出力を調整します。保存後にエントリー作成へ進んでください。</p>
+      </div>
+      <div className="card">
+        <form onSubmit={onSubmit}>
+          <label>
+            表示名
+            <input
+              value={profile.display_name ?? ''}
+              onChange={(e) => setProfile({ ...profile, display_name: e.target.value || null })}
+            />
+          </label>
+          <label>
+            文法上の性
+            <select
+              value={profile.grammatical_gender}
+              onChange={(e) =>
+                setProfile({ ...profile, grammatical_gender: e.target.value as Profile['grammatical_gender'] })
+              }
+            >
+              <option value="male">男性</option>
+              <option value="female">女性</option>
+              <option value="neutral">中性</option>
+              <option value="auto">自動</option>
+            </select>
+          </label>
+          <label>
+            CEFRレベル
+            <select
+              value={profile.cefr_level}
+              onChange={(e) =>
+                setProfile({ ...profile, cefr_level: e.target.value as Profile['cefr_level'] })
+              }
+            >
+              <option>A1</option>
+              <option>A2</option>
+              <option>B1</option>
+              <option>B2</option>
+              <option>C1</option>
+              <option>C2</option>
+            </select>
+          </label>
+          <label>
+            丁寧さ（任意）
+            <input
+              value={profile.politeness_pref ?? ''}
+              onChange={(e) => setProfile({ ...profile, politeness_pref: e.target.value || null })}
+              placeholder="tu / vous など"
+            />
+          </label>
+          <button type="submit" disabled={saving}>
+            {saving ? '保存中...' : '設定を保存'}
+          </button>
+        </form>
+        <div className="actions-row">
+          <Link href="/entries/new" className="badge">
+            このまま新規エントリーへ
+          </Link>
+          <Link href="/entries" className="badge">
+            エントリー一覧へ
+          </Link>
+        </div>
+        <button
+          type="button"
+          onClick={onDeleteAccount}
+          disabled={saving}
+          className="btn-danger"
+        >
+          アカウント削除
         </button>
-      </form>
-      <button
-        type="button"
-        onClick={onDeleteAccount}
-        disabled={saving}
-        className="btn-danger"
-      >
-        アカウント削除
-      </button>
-      {error ? <p className="error">{error}</p> : null}
-      <p>
-        <Link href="/entries">エントリー一覧へ</Link>
-      </p>
+        {error ? <p className="error">{error}</p> : null}
+      </div>
     </div>
   );
 }

@@ -31,23 +31,38 @@ export default function EntriesPage() {
 
   return (
     <div>
-      <div className="card">
-        <h1>エントリー一覧</h1>
-        <p>
-          <Link href="/entries/new">新規エントリー作成</Link> | <Link href="/settings">設定</Link>
-        </p>
+      <div className="card panel-highlight">
+        <div className="section-head">
+          <h1>エントリー一覧</h1>
+          <span className="info-chip">次アクションが見える</span>
+        </div>
+        <p>迷ったら「未完了のエントリー」を開いて続きから進めてください。</p>
+        <div className="actions-row">
+          <Link href="/entries/new" className="badge">
+            新規エントリー作成
+          </Link>
+          <Link href="/settings" className="badge">
+            設定
+          </Link>
+        </div>
       </div>
       {error ? <p className="error">{error}</p> : null}
-      {entries.map((entry) => (
-        <div key={entry.id} className="card">
-          <h3>{entry.title_fr}</h3>
-          <p>
-            <span className="badge">{statusLabel[entry.status] ?? entry.status}</span>
-          </p>
-          <p>更新日時: {new Date(entry.updated_at).toLocaleString()}</p>
-          <Link href={`/entries/${entry.id}`}>開く</Link>
-        </div>
-      ))}
+      <div className="entry-list">
+        {entries.map((entry) => (
+          <div key={entry.id} className="card">
+            <div className="section-head">
+              <h3>{entry.title_fr}</h3>
+              <span className="badge">{statusLabel[entry.status] ?? entry.status}</span>
+            </div>
+            <p>更新日時: {new Date(entry.updated_at).toLocaleString()}</p>
+            <div className="actions-row">
+              <Link href={`/entries/${entry.id}`} className="badge">
+                続きを開く
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

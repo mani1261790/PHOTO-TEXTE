@@ -57,6 +57,14 @@ const statusLabel: Record<Entry['status'], string> = {
   EXPORTED: 'エクスポート済み'
 };
 
+const nextActionByStatus: Record<Entry['status'], string> = {
+  DRAFT_FR: '下書きを保存して「FRからJPへ翻訳」を押してください。',
+  JP_AUTO_READY: '意図JPを最終確認し、「意図JPをロック（一方向）」を押してください。',
+  JP_INTENT_LOCKED: '「意図JPから最終FRを生成」を押して最終文を作成してください。',
+  FINAL_FR_READY: '差分を確認したら「エクスポートを生成」で提出資料を作成してください。',
+  EXPORTED: '必要なら再エクスポートするか、メモを追記してください。'
+};
+
 export function EntryWizard({ id }: { id: string }) {
   const router = useRouter();
   const [entry, setEntry] = useState<Entry | null>(null);
@@ -276,6 +284,14 @@ export function EntryWizard({ id }: { id: string }) {
               <strong>{memos.length}</strong>
             </div>
           </div>
+        </div>
+
+        <div className="card panel-highlight">
+          <div className="section-head">
+            <h3>次にやること</h3>
+            <span className="badge">{statusLabel[entry.status]}</span>
+          </div>
+          <p>{nextActionByStatus[entry.status]}</p>
         </div>
 
         <div className="card">

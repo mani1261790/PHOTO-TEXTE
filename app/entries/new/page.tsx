@@ -46,37 +46,43 @@ export default function NewEntryPage() {
   }
 
   return (
-    <div className="card">
-      <h1>新規エントリー作成</h1>
-      <form onSubmit={onSubmit}>
-        <label>
-          フランス語タイトル
-          <input value={titleFr} onChange={(e) => setTitleFr(e.target.value)} required maxLength={200} />
-        </label>
-        <label>
-          フランス語ドラフト
-          <textarea
-            value={draftFr}
-            onChange={(e) => setDraftFr(e.target.value)}
-            rows={8}
-            required
-            maxLength={8000}
-          />
-        </label>
-        <label>
-          写真
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            required
-          />
-        </label>
-        <button type="submit" disabled={busy}>
-          {busy ? '作成中...' : '作成する'}
-        </button>
-      </form>
-      {error ? <p className="error">{error}</p> : null}
+    <div>
+      <div className="card panel-highlight">
+        <h1>新規エントリー作成</h1>
+        <p>まずは写真とフランス語下書きを登録します。登録後に翻訳ステップへ進みます。</p>
+      </div>
+      <div className="card">
+        <form onSubmit={onSubmit}>
+          <label>
+            フランス語タイトル
+            <input value={titleFr} onChange={(e) => setTitleFr(e.target.value)} required maxLength={200} />
+          </label>
+          <label>
+            フランス語ドラフト
+            <textarea
+              value={draftFr}
+              onChange={(e) => setDraftFr(e.target.value)}
+              rows={8}
+              required
+              maxLength={8000}
+              placeholder="例: 今日、私は学校の帰り道で夕焼けを見た。"
+            />
+          </label>
+          <label>
+            写真
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              required
+            />
+          </label>
+          <button type="submit" disabled={busy}>
+            {busy ? '作成中...' : '作成して次へ'}
+          </button>
+        </form>
+        {error ? <p className="error">{error}</p> : null}
+      </div>
     </div>
   );
 }
