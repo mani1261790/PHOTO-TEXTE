@@ -1,0 +1,283 @@
+:root {
+  --theme-primary: #0a84ff;
+  --theme-primary-pressed: #0060d1;
+  --theme-secondary: #f2f4f7;
+  --theme-bg: #f5f5f7;
+  --theme-surface: #ffffff;
+  --theme-border: #d2d2d7;
+  --theme-text: #1d1d1f;
+  --theme-subtle: #6e6e73;
+  --theme-success: #2f9e44;
+  --theme-danger: #d92d20;
+  --theme-warning-bg: #fff3bf;
+  --diff-add: #e8f9ee;
+  --diff-remove: #fff0ef;
+
+  --radius-card: 14px;
+  --radius-control: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'SF Pro Text', 'SF Pro JP', 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+  background: var(--theme-bg);
+  color: var(--theme-text);
+  line-height: 1.5;
+}
+
+main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+}
+
+a {
+  color: var(--theme-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin-top: 0;
+  letter-spacing: -0.01em;
+}
+
+.card {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-card);
+  padding: 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 2px #00000008;
+}
+
+input,
+textarea,
+select,
+button {
+  width: 100%;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--theme-border);
+  padding: 10px 12px;
+  font: inherit;
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+
+input,
+textarea,
+select {
+  background: #fff;
+  color: var(--theme-text);
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+button:focus {
+  outline: 2px solid #99c8ff;
+  outline-offset: 1px;
+}
+
+button {
+  background: var(--theme-primary);
+  color: #fff;
+  border: 1px solid var(--theme-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+button:hover {
+  background: var(--theme-primary-pressed);
+}
+
+button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--theme-secondary);
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+}
+
+.btn-secondary:hover {
+  background: #e9ebef;
+}
+
+.btn-danger {
+  background: var(--theme-danger);
+  border-color: var(--theme-danger);
+}
+
+.btn-danger:hover {
+  background: #b42318;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #344054;
+  background: #f2f4f7;
+  border: 1px solid #e4e7ec;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.error {
+  color: var(--theme-danger);
+  font-weight: 600;
+}
+
+.success {
+  color: var(--theme-success);
+}
+
+.wizard-shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.timeline {
+  position: sticky;
+  top: 16px;
+}
+
+.timeline-step {
+  border-left: 2px solid #e4e7ec;
+  padding: 6px 0 10px 12px;
+}
+
+.timeline-step.active {
+  border-left-color: var(--theme-primary);
+}
+
+.timeline-step.done {
+  border-left-color: var(--theme-success);
+}
+
+.timeline-detail {
+  font-size: 12px;
+  color: var(--theme-subtle);
+}
+
+.hero {
+  background: var(--theme-surface);
+}
+
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.hero-title-row h1 {
+  margin: 0;
+  font-size: clamp(24px, 3.3vw, 34px);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.metric {
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  padding: 10px;
+  background: #fafafa;
+}
+
+.metric span {
+  color: var(--theme-subtle);
+  font-size: 12px;
+}
+
+.metric strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 20px;
+}
+
+.diff-add {
+  background: var(--diff-add);
+}
+
+.diff-remove {
+  background: var(--diff-remove);
+  text-decoration: line-through;
+}
+
+.diff-block {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  background: #fafafa;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.unknown-btn {
+  width: auto;
+  display: inline;
+  margin: 0;
+  padding: 0 2px;
+  border-radius: 0;
+  border: none;
+  background: var(--theme-warning-bg);
+  color: inherit;
+  border-bottom: 1px dashed #7a5c00;
+}
+
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.checkbox-inline input {
+  width: auto;
+  margin: 0;
+}
+
+@media (max-width: 860px) {
+  .wizard-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline {
+    position: static;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
