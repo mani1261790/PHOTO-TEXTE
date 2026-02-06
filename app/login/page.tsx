@@ -1,10 +1,15 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
+import { apiFetch } from '@/lib/api/fetcher';
 import { setAccessToken } from '@/lib/auth/token-store';
+
+type ProfileCheck = {
+  created_at: string | null;
+  updated_at: string | null;
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +18,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  async function routeAfterLogin() {
+    try {
+      const profile = await apiFetch<ProfileCheck>('/api/me');
+      const hasConfigured = Boolean(
+        profile?.created_at && profile?.updated_at && profile.created_at !== profile.updated_at
+      );
+      router.push(hasConfigured ? '/entries' : '/settings');
+    } catch (err) {
+      router.push('/settings');
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -45,7 +62,7 @@ export default function LoginPage() {
     }
 
     setAccessToken(json.access_token);
-    router.push('/settings');
+    await routeAfterLogin();
   }
 
   return (
@@ -97,9 +114,6 @@ export default function LoginPage() {
           <button type="submit">{mode === 'login' ? 'ログイン' : 'アカウント作成'}</button>
         </form>
         {error ? <p className="error">{error}</p> : null}
-        <p>
-          <Link href="/entries">エントリー一覧へ</Link>
-        </p>
       </div>
     </div>
   );
