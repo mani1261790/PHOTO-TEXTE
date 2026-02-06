@@ -417,7 +417,7 @@ export function EntryWizard({ id }: { id: string }) {
           <h3>ステップ5: 最終フランス語生成（編集不可）</h3>
           <button
             type="button"
-            onClick={rewrite}
+            onClick={() => void rewrite()}
             disabled={busy || entry.status !== 'JP_INTENT_LOCKED'}
           >
             意図JPから最終FRを生成
