@@ -4,6 +4,7 @@ import { badRequest } from '@/lib/api/errors';
 import { parseJson } from '@/lib/api/parse';
 import { handleApiError, ok } from '@/lib/api/response';
 import { profileUpdateSchema } from '@/lib/api/schemas';
+import { encryptField, unwrapDataKey } from '@/lib/crypto/envelope';
 import { authedClient } from '@/lib/supabase/authed';
 import { createServiceClient } from '@/lib/supabase/client';
 
@@ -34,7 +35,10 @@ export async function GET(req: NextRequest) {
       badRequest('PROFILE_NOT_FOUND', 'Profile not found');
     }
 
-    return ok(data);
+    return ok({
+      ...data,
+      email: user.email
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -44,15 +48,36 @@ export async function PUT(req: NextRequest) {
   try {
     const { user, client } = await authedClient(req);
     const payload = await parseJson(req, profileUpdateSchema);
+    const updateBody: Record<string, unknown> = {
+      display_name: payload.display_name ?? null,
+      grammatical_gender: payload.grammatical_gender,
+      cefr_level: payload.cefr_level,
+      politeness_pref: payload.politeness_pref ?? null
+    };
+
+    if (payload.email) {
+      const { data: profileForKey, error: keyError } = await client
+        .from('user_profiles')
+        .select('wrapped_data_key')
+        .eq('id', user.id)
+        .single();
+
+      if (keyError || !profileForKey) {
+        badRequest('PROFILE_NOT_FOUND', 'Profile not found');
+      }
+
+      const dataKey = unwrapDataKey(profileForKey.wrapped_data_key);
+      updateBody.email_encrypted = encryptField(dataKey, payload.email);
+
+      const emailUpdate = await client.auth.updateUser({ email: payload.email });
+      if (emailUpdate.error) {
+        badRequest('PROFILE_UPDATE_FAILED', 'Unable to update profile');
+      }
+    }
 
     const { data, error } = await client
       .from('user_profiles')
-      .update({
-        display_name: payload.display_name ?? null,
-        grammatical_gender: payload.grammatical_gender,
-        cefr_level: payload.cefr_level,
-        politeness_pref: payload.politeness_pref ?? null
-      })
+      .update(updateBody)
       .eq('id', user.id)
       .select('id,display_name,grammatical_gender,cefr_level,politeness_pref,updated_at')
       .single();
@@ -61,7 +86,10 @@ export async function PUT(req: NextRequest) {
       badRequest('PROFILE_UPDATE_FAILED', 'Unable to update profile');
     }
 
-    return ok(data);
+    return ok({
+      ...data,
+      email: payload.email ?? user.email
+    });
   } catch (error) {
     return handleApiError(error);
   }

@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 
@@ -8,6 +7,7 @@ import { apiFetch } from '@/lib/api/fetcher';
 import { clearAccessToken } from '@/lib/auth/token-store';
 
 type Profile = {
+  email: string | null;
   display_name: string | null;
   grammatical_gender: 'male' | 'female' | 'neutral' | 'auto';
   cefr_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
@@ -38,6 +38,7 @@ export default function SettingsPage() {
         body: JSON.stringify(profile)
       });
       setProfile(updated);
+      router.push('/entries');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -71,10 +72,19 @@ export default function SettingsPage() {
     <div>
       <div className="card panel-highlight">
         <h1>設定</h1>
-        <p>学習スタイルに合わせてAI出力を調整します。保存後にエントリー作成へ進んでください。</p>
+        <p>学習スタイルに合わせてAI出力を調整します。</p>
       </div>
       <div className="card">
         <form onSubmit={onSubmit}>
+          <label>
+            メールアドレス
+            <input
+              type="email"
+              value={profile.email ?? ''}
+              onChange={(e) => setProfile({ ...profile, email: e.target.value || null })}
+              required
+            />
+          </label>
           <label>
             表示名
             <input
@@ -124,22 +134,11 @@ export default function SettingsPage() {
             {saving ? '保存中...' : '設定を保存'}
           </button>
         </form>
-        <div className="actions-row">
-          <Link href="/entries/new" className="badge">
-            このまま新規エントリーへ
-          </Link>
-          <Link href="/entries" className="badge">
-            エントリー一覧へ
-          </Link>
-        </div>
-        <button
-          type="button"
-          onClick={onDeleteAccount}
-          disabled={saving}
-          className="btn-danger"
-        >
-          アカウント削除
-        </button>
+        <p>
+          <button type="button" onClick={onDeleteAccount} disabled={saving} className="link-danger">
+            アカウントを削除する
+          </button>
+        </p>
         {error ? <p className="error">{error}</p> : null}
       </div>
     </div>

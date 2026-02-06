@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const profileUpdateSchema = z.object({
+  email: z.string().email().max(320).optional(),
   display_name: z.string().max(80).optional().nullable(),
   grammatical_gender: z.enum(['male', 'female', 'neutral', 'auto']),
   cefr_level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']),

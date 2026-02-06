@@ -38,14 +38,44 @@ export async function GET(req: NextRequest) {
     const { client } = await authedClient(req);
     const { data, error } = await client
       .from('entries')
-      .select('id,title_fr,status,created_at,updated_at')
+      .select('id,title_fr,status,photo_asset_id,final_fr,created_at,updated_at')
       .order('created_at', { ascending: false });
 
     if (error) {
       badRequest('ENTRY_LIST_FAILED', 'Unable to fetch entries');
     }
 
-    return ok({ entries: data ?? [] });
+    const entries = data ?? [];
+    const assetIds = [...new Set(entries.map((entry) => entry.photo_asset_id))];
+    const { data: assets } = assetIds.length
+      ? await client
+          .from('assets')
+          .select('id,object_path')
+          .in('id', assetIds)
+      : { data: [] as { id: string; object_path: string }[] };
+
+    const assetPathById = new Map((assets ?? []).map((asset) => [asset.id, asset.object_path]));
+
+    const entriesWithPreview = await Promise.all(
+      entries.map(async (entry) => {
+        const objectPath = assetPathById.get(entry.photo_asset_id);
+        let photo_preview_url: string | null = null;
+
+        if (objectPath) {
+          const signed = await client.storage.from(process.env.PHOTO_BUCKET ?? 'photos').createSignedUrl(objectPath, 300);
+          if (!signed.error && signed.data?.signedUrl) {
+            photo_preview_url = signed.data.signedUrl;
+          }
+        }
+
+        return {
+          ...entry,
+          photo_preview_url
+        };
+      })
+    );
+
+    return ok({ entries: entriesWithPreview });
   } catch (error) {
     return handleApiError(error);
   }
