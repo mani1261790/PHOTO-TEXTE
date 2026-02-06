@@ -389,7 +389,7 @@ export function EntryWizard({ id }: { id: string }) {
 
         <div className="card">
           <h3>ステップ3: JP自動翻訳</h3>
-          <button type="button" onClick={translate} disabled={!draftEditable || busy}>
+          <button type="button" onClick={() => void translate()} disabled={!draftEditable || busy}>
             FRからJPへ翻訳
           </button>
           <textarea rows={6} value={entry.jp_auto ?? ''} readOnly />
