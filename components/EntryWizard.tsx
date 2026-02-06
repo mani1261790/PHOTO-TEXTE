@@ -35,11 +35,11 @@ type HighlightToken = {
 };
 
 const steps = [
-  { key: 'DRAFT_FR', title: '下書き作成', detail: 'タイトルと本文を整える' },
-  { key: 'JP_AUTO_READY', title: 'JP自動翻訳', detail: 'FRからJPを生成' },
-  { key: 'JP_INTENT_LOCKED', title: '意図JPロック', detail: 'ここが最後の編集ポイント' },
-  { key: 'FINAL_FR_READY', title: '最終FR生成', detail: 'AI出力は読み取り専用' },
-  { key: 'EXPORTED', title: 'PPTX出力', detail: '提出物をダウンロード' }
+  { key: 'DRAFT_FR', title: '1. 下書きを入力', detail: 'タイトルと本文を入力すると自動保存されます' },
+  { key: 'JP_AUTO_READY', title: '2. 日本語案を確認', detail: 'FRの下書きから自動で日本語案を作成します' },
+  { key: 'JP_INTENT_LOCKED', title: '3. 意図を確定', detail: '日本語案を直してロックすると次へ進みます' },
+  { key: 'FINAL_FR_READY', title: '4. 最終文を確認', detail: '最終FRは自動生成され、編集できません' },
+  { key: 'EXPORTED', title: '5. 提出資料を出力', detail: 'PPTXをダウンロードして提出します' }
 ] as const;
 
 const statusIndex: Record<Entry['status'], number> = {
@@ -51,17 +51,17 @@ const statusIndex: Record<Entry['status'], number> = {
 };
 
 const statusLabel: Record<Entry['status'], string> = {
-  DRAFT_FR: '下書き作成中',
-  JP_AUTO_READY: 'JP自動翻訳完了',
-  JP_INTENT_LOCKED: '意図JPロック済み',
-  FINAL_FR_READY: '最終FR生成完了',
-  EXPORTED: 'エクスポート済み'
+  DRAFT_FR: '下書き入力中',
+  JP_AUTO_READY: '日本語案を確認中',
+  JP_INTENT_LOCKED: '最終文を生成中',
+  FINAL_FR_READY: '最終文の確認完了',
+  EXPORTED: '提出資料を出力済み'
 };
 
 const nextActionByStatus: Record<Entry['status'], string> = {
-  DRAFT_FR: '下書きを保存して「FRからJPへ翻訳」を押してください。',
-  JP_AUTO_READY: '意図JPを最終確認し、「意図JPをロック（一方向）」を押してください。',
-  JP_INTENT_LOCKED: '「意図JPから最終FRを生成」を押して最終文を作成してください。',
+  DRAFT_FR: 'タイトルと下書きを入力してください。保存と翻訳は自動で進みます。',
+  JP_AUTO_READY: '日本語案を最終確認して「意図JPを確定」を押してください。',
+  JP_INTENT_LOCKED: '最終フランス語を自動生成しています。少しお待ちください。',
   FINAL_FR_READY: '差分を確認したら「エクスポートを生成」で提出資料を作成してください。',
   EXPORTED: '必要なら再エクスポートするか、メモを追記してください。'
 };
@@ -151,6 +151,14 @@ export function EntryWizard({ id }: { id: string }) {
     };
   }, [entry, draftEditable]);
 
+  useEffect(() => {
+    if (!entry) return;
+    if (entry.status === 'JP_INTENT_LOCKED' && !entry.final_fr) {
+      void rewrite({ auto: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry?.status, entry?.final_fr]);
+
   async function updateDraftFields(options?: { autoTranslate?: boolean; silent?: boolean }) {
     if (!entry || !draftEditable) return;
     const silent = options?.silent ?? false;
@@ -167,7 +175,10 @@ export function EntryWizard({ id }: { id: string }) {
       });
       setEntry(updated);
       lastSavedDraftRef.current = { title_fr: updated.title_fr, draft_fr: updated.draft_fr };
-      if (options?.autoTranslate && updated.status === 'DRAFT_FR') {
+      if (
+        options?.autoTranslate &&
+        (updated.status === 'DRAFT_FR' || updated.status === 'JP_AUTO_READY')
+      ) {
         await translate({ auto: true });
       }
     } catch (err) {
@@ -356,7 +367,7 @@ export function EntryWizard({ id }: { id: string }) {
         </div>
 
         <div className="card">
-          <h3>ステップ2: 入力（下書き）</h3>
+          <h3>下書き入力（自動保存）</h3>
           <label>
             タイトル（FR）
             <input
@@ -374,29 +385,22 @@ export function EntryWizard({ id }: { id: string }) {
               disabled={!draftEditable || busy}
             />
           </label>
-          <button
-            type="button"
-            onClick={() => updateDraftFields({ autoTranslate: true })}
-            disabled={!draftEditable || busy}
-          >
-            下書きを保存
-          </button>
-          {draftSaving ? <p className="badge">自動保存中...</p> : null}
+          {draftSaving ? <p className="badge">自動保存しています…</p> : null}
           {entry.status !== 'DRAFT_FR' && entry.status !== 'JP_AUTO_READY' ? (
-            <p className="badge">ロック後は編集できません</p>
+            <p className="badge">意図確定後は編集できません</p>
           ) : null}
         </div>
 
         <div className="card">
-          <h3>ステップ3: JP自動翻訳</h3>
-          <button type="button" onClick={() => void translate()} disabled={!draftEditable || busy}>
-            FRからJPへ翻訳
-          </button>
+          <h3>日本語案（自動生成）</h3>
+          {entry.status === 'DRAFT_FR' ? (
+            <p className="badge">下書き入力後に自動で日本語案を作成します</p>
+          ) : null}
           <textarea rows={6} value={entry.jp_auto ?? ''} readOnly />
         </div>
 
         <div className="card">
-          <h3>ステップ4: 意図JPを編集（最終編集）</h3>
+          <h3>意図JPを確定（最後の編集）</h3>
           {entry.status === 'JP_AUTO_READY' ? (
             <>
               <textarea
@@ -405,7 +409,7 @@ export function EntryWizard({ id }: { id: string }) {
                 onChange={(e) => setJpIntentDraft(e.target.value)}
               />
               <button type="button" onClick={lockIntent} disabled={busy || !jpIntentDraft.trim()}>
-                意図JPをロック（一方向）
+                意図JPを確定
               </button>
             </>
           ) : (
@@ -414,14 +418,10 @@ export function EntryWizard({ id }: { id: string }) {
         </div>
 
         <div className="card">
-          <h3>ステップ5: 最終フランス語生成（編集不可）</h3>
-          <button
-            type="button"
-            onClick={() => void rewrite()}
-            disabled={busy || entry.status !== 'JP_INTENT_LOCKED'}
-          >
-            意図JPから最終FRを生成
-          </button>
+          <h3>最終フランス語（自動生成・編集不可）</h3>
+          {entry.status === 'JP_INTENT_LOCKED' && !entry.final_fr ? (
+            <p className="badge">最終フランス語を自動生成しています…</p>
+          ) : null}
           <textarea rows={7} value={entry.final_fr ?? ''} readOnly />
         </div>
 
@@ -434,7 +434,7 @@ export function EntryWizard({ id }: { id: string }) {
         ) : null}
 
         <div className="card">
-          <h3>ステップ7: PPTXエクスポート</h3>
+          <h3>提出用PPTXを出力</h3>
           <label className="checkbox-inline">
             <input
               type="checkbox"
@@ -458,7 +458,7 @@ export function EntryWizard({ id }: { id: string }) {
         </div>
 
         <div className="card">
-          <h3>ステップ8: メモ</h3>
+          <h3>メモ</h3>
           <label>
             メモ種別
             <select value={memoType} onChange={(e) => setMemoType(e.target.value as Memo['memo_type'])}>

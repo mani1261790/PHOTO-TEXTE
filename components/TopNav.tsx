@@ -1,21 +1,35 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { clearAccessToken, getAccessToken } from '@/lib/auth/token-store';
+import {
+  authChangeEventName,
+  clearAccessToken,
+  getAccessToken
+} from '@/lib/auth/token-store';
 
 export function TopNav() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isAuthed, setIsAuthed] = useState(false);
 
   useEffect(() => {
     const syncAuth = () => setIsAuthed(Boolean(getAccessToken()));
+    const authEvent = authChangeEventName();
     syncAuth();
     window.addEventListener('storage', syncAuth);
-    return () => window.removeEventListener('storage', syncAuth);
+    window.addEventListener(authEvent, syncAuth);
+    return () => {
+      window.removeEventListener('storage', syncAuth);
+      window.removeEventListener(authEvent, syncAuth);
+    };
   }, []);
+
+  useEffect(() => {
+    setIsAuthed(Boolean(getAccessToken()));
+  }, [pathname]);
 
   const handleLogout = () => {
     clearAccessToken();
