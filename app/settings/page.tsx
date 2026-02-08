@@ -7,7 +7,7 @@ import { apiFetch } from '@/lib/api/fetcher';
 import { clearAccessToken } from '@/lib/auth/token-store';
 
 type Profile = {
-  email: string | null;
+  email: string;
   display_name: string | null;
   grammatical_gender: 'male' | 'female' | 'neutral' | 'auto';
   cefr_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
@@ -21,7 +21,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     apiFetch<Profile>('/api/me')
-      .then(setProfile)
+      .then((data) => setProfile({ ...data, email: data.email ?? '' }))
       .catch((err) => setError(err.message));
   }, []);
 
@@ -79,8 +79,8 @@ export default function SettingsPage() {
             メールアドレス
             <input
               type="email"
-              value={profile.email ?? ''}
-              onChange={(e) => setProfile({ ...profile, email: e.target.value || null })}
+              value={profile.email}
+              onChange={(e) => setProfile({ ...profile, email: e.target.value })}
               required
             />
             <span className="field-meta">ログインに使用するメールです。</span>
