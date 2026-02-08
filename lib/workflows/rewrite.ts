@@ -29,6 +29,23 @@ export async function runRewriteWorkflow(params: {
   }
 
   assertRewritable(entry.status);
+  if (entry.final_fr) {
+    const { data, error } = await client
+      .from('entries')
+      .update({
+        status: 'FINAL_FR_READY'
+      })
+      .eq('id', entryId)
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      badRequest('REWRITE_FAILED', 'Unable to finalize rewritten text');
+    }
+
+    return data;
+  }
+
   if (!entry.jp_intent) {
     badRequest('MISSING_INTENT', 'Intent text not found');
   }
@@ -38,6 +55,9 @@ export async function runRewriteWorkflow(params: {
     grammaticalGender: profile.grammatical_gender,
     politenessPref: profile.politeness_pref
   });
+  if (!finalFr.trim()) {
+    badRequest('REWRITE_FAILED', 'Generated text is empty');
+  }
 
   const { data, error } = await client
     .from('entries')

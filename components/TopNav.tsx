@@ -14,6 +14,7 @@ export function TopNav() {
   const router = useRouter();
   const pathname = usePathname();
   const [isAuthed, setIsAuthed] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const syncAuth = () => setIsAuthed(Boolean(getAccessToken()));
@@ -29,37 +30,65 @@ export function TopNav() {
 
   useEffect(() => {
     setIsAuthed(Boolean(getAccessToken()));
+    setMenuOpen(false);
   }, [pathname]);
+
+  const closeMenu = () => setMenuOpen(false);
 
   const handleLogout = () => {
     clearAccessToken();
     setIsAuthed(false);
+    closeMenu();
     router.push('/login');
   };
 
   return (
     <header className="topnav">
       <div className="topnav-inner">
-        <Link href="/" className="brand">
-          <span className="brand-mark" aria-hidden>
-            PT
-          </span>
-          <span>
-            <strong>PHOTO-TEXTE</strong>
-            <small>Atelier de rédaction visuelle</small>
-          </span>
-        </Link>
-        <nav className="topnav-links" aria-label="主要メニュー">
+        <div className="topnav-mobile-row">
+          <Link href="/" className="brand" onClick={closeMenu}>
+            <span className="brand-mark" aria-hidden>
+              PT
+            </span>
+            <span>
+              <strong>PHOTO-TEXTE</strong>
+              <small>Atelier de rédaction visuelle</small>
+            </span>
+          </Link>
+          <button
+            type="button"
+            className="topnav-toggle"
+            aria-label={menuOpen ? 'メニューを閉じる' : 'メニューを開く'}
+            aria-expanded={menuOpen}
+            aria-controls="primary-menu"
+            onClick={() => setMenuOpen((current) => !current)}
+          >
+            <span aria-hidden />
+            <span aria-hidden />
+            <span aria-hidden />
+          </button>
+        </div>
+        <nav
+          id="primary-menu"
+          className={`topnav-links${menuOpen ? ' open' : ''}`}
+          aria-label="主要メニュー"
+        >
           {isAuthed ? (
             <>
-              <Link href="/entries">エントリー一覧</Link>
-              <Link href="/settings">設定</Link>
+              <Link href="/entries" onClick={closeMenu}>
+                エントリー一覧
+              </Link>
+              <Link href="/settings" onClick={closeMenu}>
+                設定
+              </Link>
               <button type="button" className="topnav-action" onClick={handleLogout}>
                 ログアウト
               </button>
             </>
           ) : (
-            <Link href="/login">ログイン・新規登録</Link>
+            <Link href="/login" onClick={closeMenu}>
+              ログイン・新規登録
+            </Link>
           )}
         </nav>
       </div>

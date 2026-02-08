@@ -69,12 +69,12 @@ export default function SettingsPage() {
   }
 
   return (
-    <div>
+    <div className="page-stack">
       <div className="card panel-highlight">
         <h1>設定</h1>
-        <p>学習スタイルに合わせてAI出力を調整します。</p>
+        <p>最終フランス語の出力品質に影響する項目です。最初にここを設定してください。</p>
       </div>
-      <div className="card">
+      <div className="card form-card">
         <form onSubmit={onSubmit}>
           <label>
             メールアドレス
@@ -84,6 +84,7 @@ export default function SettingsPage() {
               onChange={(e) => setProfile({ ...profile, email: e.target.value || null })}
               required
             />
+            <span className="field-meta">ログインに使用するメールです。</span>
           </label>
           <label>
             表示名
@@ -91,6 +92,7 @@ export default function SettingsPage() {
               value={profile.display_name ?? ''}
               onChange={(e) => setProfile({ ...profile, display_name: e.target.value || null })}
             />
+            <span className="field-meta">任意。提出資料に表示されます。</span>
           </label>
           <label>
             文法上の性
@@ -105,6 +107,7 @@ export default function SettingsPage() {
               <option value="neutral">中性</option>
               <option value="auto">自動</option>
             </select>
+            <span className="field-meta">指定しない場合は「自動」がおすすめです。</span>
           </label>
           <label>
             CEFRレベル
@@ -121,6 +124,7 @@ export default function SettingsPage() {
               <option>C1</option>
               <option>C2</option>
             </select>
+            <span className="field-meta">学習中の目標レベルを選択してください。</span>
           </label>
           <label>
             丁寧さ（任意）
@@ -129,12 +133,13 @@ export default function SettingsPage() {
               onChange={(e) => setProfile({ ...profile, politeness_pref: e.target.value || null })}
               placeholder="tu / vous など"
             />
+            <span className="field-meta">例: 丁寧寄り / カジュアル寄り / vous固定</span>
           </label>
           <button type="submit" disabled={saving}>
             {saving ? '保存中...' : '設定を保存'}
           </button>
         </form>
-        <p>
+        <p className="danger-zone">
           <button type="button" onClick={onDeleteAccount} disabled={saving} className="link-danger">
             アカウントを削除する
           </button>
