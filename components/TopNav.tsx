@@ -9,6 +9,7 @@ import {
   clearAccessToken,
   getAccessToken
 } from '@/lib/auth/token-store';
+import { LogoMark } from '@/components/LogoMark';
 
 export function TopNav() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export function TopNav() {
         <div className="topnav-mobile-row">
           <Link href="/" className="brand" onClick={closeMenu}>
             <span className="brand-mark" aria-hidden>
-              PT
+              <LogoMark />
             </span>
             <span>
               <strong>PHOTO-TEXTE</strong>
