@@ -1,6 +1,25 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+import { authChangeEventName, getAccessToken } from '@/lib/auth/token-store';
 
 export default function Home() {
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    const syncAuth = () => setIsAuthed(Boolean(getAccessToken()));
+    const authEvent = authChangeEventName();
+    syncAuth();
+    window.addEventListener('storage', syncAuth);
+    window.addEventListener(authEvent, syncAuth);
+    return () => {
+      window.removeEventListener('storage', syncAuth);
+      window.removeEventListener(authEvent, syncAuth);
+    };
+  }, []);
+
   return (
     <div className="page-stack">
       <div className="card panel-highlight hero">
@@ -11,12 +30,20 @@ export default function Home() {
           初めてでも、下書きから最終文まで迷わず進めます。
         </p>
         <div className="actions-row">
-          <Link href="/entries/new" className="btn-link-primary">
-            新しいエントリーを作る
-          </Link>
-          <Link href="/entries" className="btn-link-secondary">
-            これまでのエントリーを見る
-          </Link>
+          {isAuthed ? (
+            <>
+              <Link href="/entries/new" className="btn-link-primary">
+                新しいエントリーを作る
+              </Link>
+              <Link href="/entries" className="btn-link-secondary">
+                これまでのエントリーを見る
+              </Link>
+            </>
+          ) : (
+            <Link href="/login" className="btn-link-primary">
+              ログインしてはじめる
+            </Link>
+          )}
         </div>
       </div>
 
