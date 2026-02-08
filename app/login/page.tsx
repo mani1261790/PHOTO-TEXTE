@@ -26,7 +26,7 @@ export default function LoginPage() {
       const hasConfigured = Boolean(
         profile?.created_at && profile?.updated_at && profile.created_at !== profile.updated_at
       );
-      router.push(hasConfigured ? '/entries' : '/settings');
+      router.push(hasConfigured ? '/' : '/settings');
     } catch (err) {
       router.push('/settings');
     }

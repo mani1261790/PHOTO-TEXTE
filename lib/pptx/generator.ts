@@ -2,25 +2,22 @@ import path from 'node:path';
 
 import PptxGenJS from 'pptxgenjs';
 
-import { HighlightToken } from '@/lib/cefr/vocab';
-import { Memo } from '@/lib/types';
-
 export interface PptxExportInput {
   titleFr: string;
   draftFr: string;
-  jpText: string;
+  jpAuto: string;
+  jpIntent: string;
   finalFr: string;
   photoBase64?: string;
-  draftHighlights?: HighlightToken[];
-  finalHighlights?: HighlightToken[];
-  memos?: Memo[];
-  includeMemos?: boolean;
 }
 
-const template = {
-  title: { x: 0.5, y: 0.4, w: 12.3, h: 0.7, fontFace: 'Aptos Display', baseSize: 30 },
-  body: { x: 0.7, y: 5.3, w: 12, h: 1.8, fontFace: 'Aptos', baseSize: 22 },
-  image: { x: 0.8, y: 1.2, w: 11.8, h: 3.9 }
+const layout = {
+  title: { x: 0.5, y: 0.25, w: 12.3, h: 0.65 },
+  leftCol: { x: 0.6, y: 1.2, w: 5.9, h: 5.8 },
+  rightCol: { x: 6.8, y: 1.2, w: 5.9, h: 5.8 },
+  rightTop: { x: 6.8, y: 1.2, w: 5.9, h: 2.75 },
+  rightBottom: { x: 6.8, y: 4.25, w: 5.9, h: 2.75 },
+  textPad: 0.18
 };
 
 function fitText(value: string, baseSize: number, maxChars: number): { text: string; size: number } {
@@ -38,23 +35,87 @@ function fitText(value: string, baseSize: number, maxChars: number): { text: str
   return { text: `${clean.slice(0, Math.max(0, maxChars - 1))}…`, size: 14 };
 }
 
-function highlightedList(tokens: HighlightToken[] = []): string {
-  const unique = new Set<string>();
-  const lines: string[] = [];
+function addSlideTitle(slide: PptxGenJS.Slide, value: string) {
+  slide.addText(value, {
+    ...layout.title,
+    fontFace: 'Aptos Display',
+    fontSize: 24,
+    bold: true,
+    color: '0F172A'
+  });
+}
 
-  for (const token of tokens) {
-    if (!token.unknown || !token.lemma || !token.meaning) {
-      continue;
-    }
-    const key = `${token.lemma}:${token.meaning}`;
-    if (unique.has(key)) {
-      continue;
-    }
-    unique.add(key);
-    lines.push(`${token.lemma} - ${token.meaning}`);
+function addPhotoOrPlaceholder(slide: PptxGenJS.Slide, data?: string) {
+  slide.addShape('rect', {
+    x: layout.leftCol.x,
+    y: layout.leftCol.y,
+    w: layout.leftCol.w,
+    h: layout.leftCol.h,
+    line: { color: 'CBD5E1', pt: 1 },
+    fill: { color: 'F8FAFC' }
+  });
+
+  if (data) {
+    slide.addImage({
+      data,
+      x: layout.leftCol.x,
+      y: layout.leftCol.y,
+      w: layout.leftCol.w,
+      h: layout.leftCol.h
+    });
+    return;
   }
 
-  return lines.length ? lines.join('\n') : 'No highlighted unknown words for this CEFR level.';
+  slide.addText('Photo not available', {
+    x: layout.leftCol.x + 0.2,
+    y: layout.leftCol.y + layout.leftCol.h / 2 - 0.15,
+    w: layout.leftCol.w - 0.4,
+    h: 0.3,
+    align: 'center',
+    fontFace: 'Aptos',
+    fontSize: 14,
+    color: '64748B'
+  });
+}
+
+function addTextPanel(
+  slide: PptxGenJS.Slide,
+  area: { x: number; y: number; w: number; h: number },
+  heading: string,
+  content: string,
+  maxChars: number
+) {
+  slide.addShape('roundRect', {
+    x: area.x,
+    y: area.y,
+    w: area.w,
+    h: area.h,
+    line: { color: 'D1D9E4', pt: 1 },
+    fill: { color: 'FFFFFF' }
+  });
+
+  slide.addText(heading, {
+    x: area.x + layout.textPad,
+    y: area.y + 0.12,
+    w: area.w - layout.textPad * 2,
+    h: 0.28,
+    fontFace: 'Aptos',
+    fontSize: 12,
+    bold: true,
+    color: '334155'
+  });
+
+  const fitted = fitText(content || ' ', 16, maxChars);
+  slide.addText(fitted.text, {
+    x: area.x + layout.textPad,
+    y: area.y + 0.45,
+    w: area.w - layout.textPad * 2,
+    h: area.h - 0.55,
+    fontFace: heading.includes('japonais') ? 'Yu Gothic' : 'Aptos',
+    fontSize: fitted.size,
+    valign: 'top',
+    color: '0F172A'
+  });
 }
 
 export async function generatePhotoTextePptx(
@@ -67,116 +128,34 @@ export async function generatePhotoTextePptx(
   pptx.company = 'PHOTO-TEXTE';
   pptx.layout = 'LAYOUT_WIDE';
 
-  // Slide 1: draft
+  // 1. Ma photo et quelques mots en français
   const s1 = pptx.addSlide();
-  const title1 = fitText(data.titleFr, template.title.baseSize, 90);
-  const draft = fitText(data.draftFr, template.body.baseSize, 620);
-  s1.background = { color: 'F9F7F1' };
-  s1.addText(title1.text, {
-    ...template.title,
-    fontFace: template.title.fontFace,
-    fontSize: title1.size,
-    color: '133C55',
-    bold: true
-  });
-  if (data.photoBase64) {
-    s1.addImage({ data: data.photoBase64, ...template.image });
-  }
-  s1.addText(draft.text, {
-    ...template.body,
-    fontFace: template.body.fontFace,
-    fontSize: draft.size,
-    color: '1F2933'
-  });
+  s1.background = { color: 'F8FAFC' };
+  addSlideTitle(s1, '1. Ma photo et quelques mots en français');
+  addPhotoOrPlaceholder(s1, data.photoBase64);
+  addTextPanel(s1, layout.rightCol, 'Texte initial (FR)', data.draftFr, 1600);
 
-  // Slide 2: JP intent
+  // 2. Ma photo et je travaille mon texte en japonais
   const s2 = pptx.addSlide();
-  const jp = fitText(data.jpText, template.body.baseSize, 620);
-  s2.background = { color: 'F0F4F8' };
-  s2.addText(title1.text, {
-    ...template.title,
-    fontFace: template.title.fontFace,
-    fontSize: title1.size,
-    color: '0B7285',
-    bold: true
-  });
-  if (data.photoBase64) {
-    s2.addImage({ data: data.photoBase64, ...template.image });
-  }
-  s2.addText(jp.text, {
-    ...template.body,
-    fontFace: 'Yu Gothic',
-    fontSize: jp.size,
-    color: '102A43'
-  });
+  s2.background = { color: 'F8FAFC' };
+  addSlideTitle(s2, '2. Ma photo et je travaille mon texte en japonais');
+  addPhotoOrPlaceholder(s2, data.photoBase64);
+  addTextPanel(s2, layout.rightTop, 'Traduction automatique (JP)', data.jpAuto, 760);
+  addTextPanel(s2, layout.rightBottom, 'Texte corrigé (JP)', data.jpIntent, 760);
 
-  // Slide 3: final FR
+  // 3. Mes textes en français
   const s3 = pptx.addSlide();
-  const finalText = fitText(data.finalFr, template.body.baseSize, 620);
-  s3.background = { color: 'F5F2EB' };
-  s3.addText(title1.text, {
-    ...template.title,
-    fontFace: template.title.fontFace,
-    fontSize: title1.size,
-    color: '3D405B',
-    bold: true
-  });
-  if (data.photoBase64) {
-    s3.addImage({ data: data.photoBase64, ...template.image });
-  }
-  s3.addText(finalText.text, {
-    ...template.body,
-    fontFace: template.body.fontFace,
-    fontSize: finalText.size,
-    color: '2D3142'
-  });
+  s3.background = { color: 'F8FAFC' };
+  addSlideTitle(s3, '3. Mes textes en français');
+  addTextPanel(s3, layout.leftCol, 'Texte initial (FR)', data.draftFr, 1600);
+  addTextPanel(s3, layout.rightCol, 'Texte final (FR)', data.finalFr, 1600);
 
-  // Slide 4: vocab and memo summary
+  // 4. Ma photo et mon texte final en français
   const s4 = pptx.addSlide();
-  s4.background = { color: 'EEF2E6' };
-  s4.addText('Vocabulary Highlights', {
-    x: 0.6,
-    y: 0.5,
-    w: 6,
-    h: 0.5,
-    fontFace: template.title.fontFace,
-    fontSize: 24,
-    color: '2F5233',
-    bold: true
-  });
-  s4.addText(highlightedList([...(data.draftHighlights || []), ...(data.finalHighlights || [])]), {
-    x: 0.8,
-    y: 1.2,
-    w: 5.8,
-    h: 5.5,
-    fontFace: 'Aptos',
-    fontSize: 16,
-    color: '1F2933'
-  });
-
-  const memoLines = data.includeMemos
-    ? (data.memos ?? []).map((memo) => `(${memo.memo_type}) ${memo.content}`).join('\n\n') || 'No memos.'
-    : 'Memos not included.';
-  const memoText = fitText(memoLines, 16, 1000);
-  s4.addText('Memos', {
-    x: 6.8,
-    y: 0.5,
-    w: 5.8,
-    h: 0.5,
-    fontFace: template.title.fontFace,
-    fontSize: 24,
-    color: '2F5233',
-    bold: true
-  });
-  s4.addText(memoText.text, {
-    x: 6.9,
-    y: 1.2,
-    w: 5.6,
-    h: 5.5,
-    fontFace: 'Aptos',
-    fontSize: memoText.size,
-    color: '1F2933'
-  });
+  s4.background = { color: 'F8FAFC' };
+  addSlideTitle(s4, '4. Ma photo et mon texte final en français');
+  addPhotoOrPlaceholder(s4, data.photoBase64);
+  addTextPanel(s4, layout.rightCol, 'Texte final (FR)', data.finalFr, 1600);
 
   const buffer = (await pptx.write({ outputType: 'nodebuffer' })) as Buffer;
   return buffer;

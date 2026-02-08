@@ -1,7 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 
 import { badRequest, conflict } from '@/lib/api/errors';
-import { highlightUnknownWords } from '@/lib/cefr/vocab';
 import { issueExportToken } from '@/lib/exports/token';
 import { generatePhotoTextePptx } from '@/lib/pptx/generator';
 import { exportBucket, photoBucket } from '@/lib/storage/buckets';
@@ -33,11 +32,9 @@ export async function runExportWorkflow(params: {
   includeMemos: boolean;
 }) {
   const { client, userId, entryId, includeMemos } = params;
+  void includeMemos;
 
-  const [entryResult, profileResult] = await Promise.all([
-    client.from('entries').select('*').eq('id', entryId).single(),
-    client.from('user_profiles').select('cefr_level').eq('id', userId).single()
-  ]);
+  const entryResult = await client.from('entries').select('*').eq('id', entryId).single();
 
   if (entryResult.error || !entryResult.data) {
     badRequest('ENTRY_NOT_FOUND', 'Entry not found');
@@ -57,27 +54,17 @@ export async function runExportWorkflow(params: {
     .eq('id', entry.photo_asset_id)
     .single();
 
-  const memosPromise = includeMemos
-    ? client.from('memos').select('*').eq('entry_id', entry.id).order('created_at', { ascending: true })
-    : Promise.resolve({ data: [] as any[] });
-
-  const [photoBase64, memosResult] = await Promise.all([
-    asset?.object_path ? signedPhotoData(client, asset.object_path) : Promise.resolve(undefined),
-    memosPromise
-  ]);
-
-  const cefr = profileResult.data?.cefr_level ?? 'A2';
+  const photoBase64 = await (asset?.object_path
+    ? signedPhotoData(client, asset.object_path)
+    : Promise.resolve(undefined));
 
   const pptxBuffer = await generatePhotoTextePptx({
     titleFr: entry.title_fr,
     draftFr: entry.draft_fr,
-    jpText: entry.jp_intent ?? entry.jp_auto,
+    jpAuto: entry.jp_auto,
+    jpIntent: entry.jp_intent ?? entry.jp_auto,
     finalFr: entry.final_fr,
-    photoBase64,
-    draftHighlights: highlightUnknownWords(entry.draft_fr, cefr),
-    finalHighlights: highlightUnknownWords(entry.final_fr, cefr),
-    memos: memosResult.data ?? [],
-    includeMemos
+    photoBase64
   });
 
   const { token, hash } = issueExportToken();

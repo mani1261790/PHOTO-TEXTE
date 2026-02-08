@@ -75,7 +75,7 @@ export function TopNav() {
         >
           {isAuthed ? (
             <>
-              <Link href="/entries" onClick={closeMenu}>
+              <Link href="/" onClick={closeMenu}>
                 エントリー一覧
               </Link>
               <Link href="/settings" onClick={closeMenu}>

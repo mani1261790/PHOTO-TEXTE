@@ -11,19 +11,9 @@ describe('pptx export privacy', () => {
     const buffer = await generatePhotoTextePptx({
       titleFr: 'Mon titre',
       draftFr: 'Je visite un parc.',
-      jpText: '公園を訪れます。',
-      finalFr: 'Je visite calmement un parc.',
-      includeMemos: true,
-      memos: [
-        {
-          id: '1',
-          entry_id: 'e1',
-          user_id: 'u1',
-          memo_type: 'SELF_NOTE',
-          content: 'Revoir les verbes',
-          created_at: new Date().toISOString()
-        }
-      ]
+      jpAuto: '公園を訪れます。',
+      jpIntent: '私は落ち着いた雰囲気で公園を訪れました。',
+      finalFr: 'Je visite calmement un parc.'
     });
 
     const zip = await JSZip.loadAsync(buffer);

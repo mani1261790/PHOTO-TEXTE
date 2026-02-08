@@ -38,7 +38,7 @@ export default function SettingsPage() {
         body: JSON.stringify(profile)
       });
       setProfile(updated);
-      router.push('/entries');
+      router.push('/');
     } catch (err) {
       setError((err as Error).message);
     } finally {

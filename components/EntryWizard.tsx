@@ -80,7 +80,6 @@ export function EntryWizard({ id }: { id: string }) {
   const [diffTokens, setDiffTokens] = useState<DiffToken[]>([]);
   const [draftHighlights, setDraftHighlights] = useState<HighlightToken[]>([]);
   const [finalHighlights, setFinalHighlights] = useState<HighlightToken[]>([]);
-  const [includeMemos, setIncludeMemos] = useState(true);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -304,7 +303,7 @@ export function EntryWizard({ id }: { id: string }) {
     try {
       const result = await apiFetch<{ token: string }>(`/api/entries/${id}/export/pptx`, {
         method: 'POST',
-        body: JSON.stringify({ include_memos: includeMemos })
+        body: JSON.stringify({ include_memos: false })
       });
       setExportUrl(`/api/exports/${result.token}/download`);
       await loadEntry();
@@ -323,7 +322,7 @@ export function EntryWizard({ id }: { id: string }) {
     setError(null);
     try {
       await apiFetch(`/api/entries/${id}`, { method: 'DELETE' });
-      router.push('/entries');
+      router.push('/');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -356,7 +355,7 @@ export function EntryWizard({ id }: { id: string }) {
           );
         })}
         <p>
-          <Link href="/entries">一覧に戻る</Link>
+          <Link href="/">一覧に戻る</Link>
         </p>
       </aside>
 
@@ -471,14 +470,6 @@ export function EntryWizard({ id }: { id: string }) {
 
         <div className="card">
           <h3>提出用PPTXを出力</h3>
-          <label className="checkbox-inline">
-            <input
-              type="checkbox"
-              checked={includeMemos}
-              onChange={(e) => setIncludeMemos(e.target.checked)}
-            />
-            <span>スライド4にメモ要約を含める</span>
-          </label>
           <button
             type="button"
             onClick={exportPptx}
