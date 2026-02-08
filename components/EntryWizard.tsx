@@ -270,19 +270,15 @@ export function EntryWizard({ id }: { id: string }) {
     }
   }
 
-  if (!entry) {
-    return <div className="card">エントリーを読み込み中...</div>;
-  }
-
-  const currentIndex = statusIndex[entry.status];
+  const currentIndex = entry ? statusIndex[entry.status] : 0;
   const draftDone = currentIndex >= statusIndex.JP_AUTO_READY;
   const jpAutoDone = currentIndex >= statusIndex.JP_INTENT_LOCKED;
   const jpIntentDone = currentIndex >= statusIndex.FINAL_FR_READY;
-  const finalDone = Boolean(entry.final_fr);
-  const exportDone = entry.status === 'EXPORTED';
+  const finalDone = Boolean(entry?.final_fr);
+  const exportDone = entry?.status === 'EXPORTED';
   const showJpAutoCard = currentIndex >= statusIndex.JP_AUTO_READY;
   const showJpIntentCard = currentIndex >= statusIndex.JP_AUTO_READY;
-  const showFinalCard = currentIndex >= statusIndex.JP_INTENT_LOCKED || Boolean(entry.final_fr);
+  const showFinalCard = currentIndex >= statusIndex.JP_INTENT_LOCKED || Boolean(entry?.final_fr);
   const showExportCard = currentIndex >= statusIndex.FINAL_FR_READY;
 
   const visibleStepKey = showExportCard
@@ -298,6 +294,9 @@ export function EntryWizard({ id }: { id: string }) {
             : 'draft';
 
   useEffect(() => {
+    if (!entry) {
+      return;
+    }
     if (!initializedVisibleStepRef.current) {
       initializedVisibleStepRef.current = true;
       previousVisibleStepRef.current = visibleStepKey;
@@ -320,7 +319,11 @@ export function EntryWizard({ id }: { id: string }) {
               : draftCardRef.current;
 
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [visibleStepKey]);
+  }, [entry, visibleStepKey]);
+
+  if (!entry) {
+    return <div className="card">エントリーを読み込み中...</div>;
+  }
 
   return (
     <div className="wizard-shell">
