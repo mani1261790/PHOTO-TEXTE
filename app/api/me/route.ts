@@ -55,7 +55,9 @@ export async function PUT(req: NextRequest) {
       politeness_pref: payload.politeness_pref ?? null
     };
 
-    if (payload.email) {
+    let nextEmail: string | undefined;
+    if (typeof payload.email === 'string' && payload.email.length && payload.email !== user.email) {
+      nextEmail = payload.email;
       const { data: profileForKey, error: keyError } = await client
         .from('user_profiles')
         .select('wrapped_data_key')
@@ -67,9 +69,9 @@ export async function PUT(req: NextRequest) {
       }
 
       const dataKey = unwrapDataKey(profileForKey.wrapped_data_key);
-      updateBody.email_encrypted = encryptField(dataKey, payload.email);
+      updateBody.email_encrypted = encryptField(dataKey, nextEmail);
 
-      const emailUpdate = await client.auth.updateUser({ email: payload.email });
+      const emailUpdate = await client.auth.updateUser({ email: nextEmail });
       if (emailUpdate.error) {
         badRequest('PROFILE_UPDATE_FAILED', 'Unable to update profile');
       }
@@ -88,7 +90,7 @@ export async function PUT(req: NextRequest) {
 
     return ok({
       ...data,
-      email: payload.email ?? user.email
+      email: nextEmail ?? user.email
     });
   } catch (error) {
     return handleApiError(error);
