@@ -99,7 +99,7 @@ export function EntriesDashboard() {
   return (
     <div className="page-stack">
       <div className="card panel-highlight">
-        <div className="section-head">
+        <div className="section-head entries-head">
           <h1>エントリー一覧</h1>
           <span className="badge">全 {entries.length} 件</span>
         </div>
