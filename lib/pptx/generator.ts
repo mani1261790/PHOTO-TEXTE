@@ -61,7 +61,14 @@ function addPhotoOrPlaceholder(slide: PptxGenJS.Slide, data?: string) {
       x: layout.leftCol.x,
       y: layout.leftCol.y,
       w: layout.leftCol.w,
-      h: layout.leftCol.h
+      h: layout.leftCol.h,
+      sizing: {
+        type: 'contain',
+        x: layout.leftCol.x,
+        y: layout.leftCol.y,
+        w: layout.leftCol.w,
+        h: layout.leftCol.h
+      }
     });
     return;
   }
@@ -85,15 +92,6 @@ function addTextPanel(
   content: string,
   maxChars: number
 ) {
-  slide.addShape('roundRect', {
-    x: area.x,
-    y: area.y,
-    w: area.w,
-    h: area.h,
-    line: { color: 'D1D9E4', pt: 1 },
-    fill: { color: 'FFFFFF' }
-  });
-
   slide.addText(heading, {
     x: area.x + layout.textPad,
     y: area.y + 0.12,
