@@ -8,7 +8,6 @@ import { apiFetch } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
 import { DiffToken } from '@/lib/diff/read-only';
 
-import { DiffReadOnly } from '@/components/DiffReadOnly';
 import { UnknownWords } from '@/components/UnknownWords';
 
 type Entry = {
@@ -79,6 +78,13 @@ export function EntryWizard({ id }: { id: string }) {
   const lastSavedDraftRef = useRef<{ title_fr: string; draft_fr: string } | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoTranslateInFlightRef = useRef(false);
+  const draftCardRef = useRef<HTMLDivElement | null>(null);
+  const jpAutoCardRef = useRef<HTMLDivElement | null>(null);
+  const jpIntentCardRef = useRef<HTMLDivElement | null>(null);
+  const finalCardRef = useRef<HTMLDivElement | null>(null);
+  const exportCardRef = useRef<HTMLDivElement | null>(null);
+  const initializedVisibleStepRef = useRef(false);
+  const previousVisibleStepRef = useRef<string>('draft');
 
   const draftEditable = useMemo(
     () => entry?.status === 'DRAFT_FR' || entry?.status === 'JP_AUTO_READY',
@@ -120,6 +126,7 @@ export function EntryWizard({ id }: { id: string }) {
       setDiffTokens([]);
       setDraftHighlights([]);
       setFinalHighlights([]);
+      setShowDiff(false);
     }
   }
 
@@ -263,22 +270,6 @@ export function EntryWizard({ id }: { id: string }) {
     }
   }
 
-  async function deleteEntry() {
-    if (!confirm('このエントリーと写真・メモ・エクスポートを完全に削除します。よろしいですか？')) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await apiFetch(`/api/entries/${id}`, { method: 'DELETE' });
-      router.push('/');
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (!entry) {
     return <div className="card">エントリーを読み込み中...</div>;
   }
@@ -289,6 +280,47 @@ export function EntryWizard({ id }: { id: string }) {
   const jpIntentDone = currentIndex >= statusIndex.FINAL_FR_READY;
   const finalDone = Boolean(entry.final_fr);
   const exportDone = entry.status === 'EXPORTED';
+  const showJpAutoCard = currentIndex >= statusIndex.JP_AUTO_READY;
+  const showJpIntentCard = currentIndex >= statusIndex.JP_AUTO_READY;
+  const showFinalCard = currentIndex >= statusIndex.JP_INTENT_LOCKED || Boolean(entry.final_fr);
+  const showExportCard = currentIndex >= statusIndex.FINAL_FR_READY;
+
+  const visibleStepKey = showExportCard
+    ? 'export'
+    : showFinalCard
+      ? 'final'
+      : currentIndex === statusIndex.JP_AUTO_READY
+        ? 'jpAuto'
+        : showJpIntentCard
+          ? 'jpIntent'
+          : showJpAutoCard
+            ? 'jpAuto'
+            : 'draft';
+
+  useEffect(() => {
+    if (!initializedVisibleStepRef.current) {
+      initializedVisibleStepRef.current = true;
+      previousVisibleStepRef.current = visibleStepKey;
+      return;
+    }
+    if (previousVisibleStepRef.current === visibleStepKey) {
+      return;
+    }
+    previousVisibleStepRef.current = visibleStepKey;
+
+    const target =
+      visibleStepKey === 'export'
+        ? exportCardRef.current
+        : visibleStepKey === 'final'
+          ? finalCardRef.current
+          : visibleStepKey === 'jpIntent'
+            ? jpIntentCardRef.current
+            : visibleStepKey === 'jpAuto'
+              ? jpAutoCardRef.current
+              : draftCardRef.current;
+
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [visibleStepKey]);
 
   return (
     <div className="wizard-shell">
@@ -346,9 +378,9 @@ export function EntryWizard({ id }: { id: string }) {
           </div>
         </div>
 
-        <div className={`card step-card${draftDone ? ' step-done' : ''}`}>
+        <div ref={draftCardRef} className={`card step-card${draftDone ? ' step-done' : ''}`}>
           <div className="step-head">
-            <h3>下書き入力（自動保存）</h3>
+            <h3>下書き入力</h3>
             {draftDone ? <span className="step-check">✓</span> : null}
           </div>
           <label>
@@ -374,80 +406,110 @@ export function EntryWizard({ id }: { id: string }) {
           ) : null}
         </div>
 
-        <div className={`card step-card${jpAutoDone ? ' step-done' : ''}`}>
-          <div className="step-head">
-            <h3>日本語文（自動生成）</h3>
-            {jpAutoDone ? <span className="step-check">✓</span> : null}
+        {showJpAutoCard ? (
+          <div ref={jpAutoCardRef} className={`card step-card${jpAutoDone ? ' step-done' : ''}`}>
+            <div className="step-head">
+              <h3>日本語文</h3>
+              {jpAutoDone ? <span className="step-check">✓</span> : null}
+            </div>
+            <textarea rows={6} value={entry.jp_auto ?? ''} readOnly />
           </div>
-          {entry.status === 'DRAFT_FR' ? (
-            <p className="badge">下書き入力後に自動で日本語文を作成します</p>
-          ) : null}
-          <textarea rows={6} value={entry.jp_auto ?? ''} readOnly />
-        </div>
+        ) : null}
 
-        <div className={`card step-card${jpIntentDone ? ' step-done' : ''}`}>
-          <div className="step-head">
-            <h3>日本語文を確定（最後の編集）</h3>
-            {jpIntentDone ? <span className="step-check">✓</span> : null}
+        {showJpIntentCard ? (
+          <div ref={jpIntentCardRef} className={`card step-card${jpIntentDone ? ' step-done' : ''}`}>
+            <div className="step-head">
+              <h3>日本語文を確定</h3>
+              {jpIntentDone ? <span className="step-check">✓</span> : null}
+            </div>
+            {entry.status === 'JP_AUTO_READY' ? (
+              <>
+                <textarea
+                  rows={6}
+                  value={jpIntentDraft}
+                  onChange={(e) => setJpIntentDraft(e.target.value)}
+                />
+                <button type="button" onClick={lockIntent} disabled={busy || !jpIntentDraft.trim()}>
+                  日本語文を確定
+                </button>
+              </>
+            ) : (
+              <textarea rows={6} value={entry.jp_intent ?? jpIntentDraft} readOnly />
+            )}
           </div>
-          {entry.status === 'JP_AUTO_READY' ? (
-            <>
-              <textarea
-                rows={6}
-                value={jpIntentDraft}
-                onChange={(e) => setJpIntentDraft(e.target.value)}
-              />
-              <button type="button" onClick={lockIntent} disabled={busy || !jpIntentDraft.trim()}>
-                日本語文を確定
+        ) : null}
+
+        {showFinalCard ? (
+          <div ref={finalCardRef} className={`card step-card${finalDone ? ' step-done' : ''}`}>
+            <div className="step-head">
+              <h3>最終フランス語</h3>
+              {finalDone ? <span className="step-check">✓</span> : null}
+            </div>
+            {entry.status === 'JP_INTENT_LOCKED' && !entry.final_fr ? (
+              <p className="badge">最終フランス語を自動生成しています…</p>
+            ) : null}
+            {showDiff && diffTokens.length ? (
+              <pre className="diff-block diff-inline">
+                {diffTokens.map((token, idx) => {
+                  if (token.kind === 'add') {
+                    return (
+                      <span key={idx} className="diff-add">
+                        +{token.value}
+                      </span>
+                    );
+                  }
+                  if (token.kind === 'remove') {
+                    return (
+                      <span key={idx} className="diff-remove">
+                        -{token.value}
+                      </span>
+                    );
+                  }
+                  return <span key={idx}>{token.value}</span>;
+                })}
+              </pre>
+            ) : (
+              <textarea rows={7} value={entry.final_fr ?? ''} readOnly />
+            )}
+            {entry.final_fr ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowDiff((current) => !current)}
+              >
+                {showDiff ? '差分を隠す' : '差分を表示'}
               </button>
-            </>
-          ) : (
-            <textarea rows={6} value={entry.jp_intent ?? jpIntentDraft} readOnly />
-          )}
-        </div>
-
-        <div className={`card step-card${finalDone ? ' step-done' : ''}`}>
-          <div className="step-head">
-            <h3>最終フランス語（自動生成・編集不可）</h3>
-            {finalDone ? <span className="step-check">✓</span> : null}
+            ) : null}
           </div>
-          {entry.status === 'JP_INTENT_LOCKED' && !entry.final_fr ? (
-            <p className="badge">最終フランス語を自動生成しています…</p>
-          ) : null}
-          <textarea rows={7} value={entry.final_fr ?? ''} readOnly />
-          {entry.final_fr ? (
+        ) : null}
+
+        {showFinalCard && entry.final_fr ? (
+          <UnknownWords label="下書きのフランス語" tokens={draftHighlights} />
+        ) : null}
+        {showFinalCard && entry.final_fr ? (
+          <UnknownWords label="最終文のフランス語" tokens={finalHighlights} />
+        ) : null}
+
+        {showExportCard ? (
+          <div ref={exportCardRef} className={`card step-card${exportDone ? ' step-done' : ''}`}>
+            <div className="step-head">
+              <h3>提出用PPTXを出力</h3>
+              {exportDone ? <span className="step-check">✓</span> : null}
+            </div>
             <button
               type="button"
-              className="btn-secondary"
-              onClick={() => setShowDiff((current) => !current)}
+              onClick={exportPptx}
+              disabled={busy || (entry.status !== 'FINAL_FR_READY' && entry.status !== 'EXPORTED')}
             >
-              {showDiff ? '差分を隠す' : '差分を表示'}
+              エクスポートを生成
             </button>
-          ) : null}
-        </div>
-
-        {entry.final_fr && showDiff ? <DiffReadOnly tokens={diffTokens} /> : null}
-        {entry.final_fr ? <UnknownWords label="下書き（フランス語）" tokens={draftHighlights} /> : null}
-        {entry.final_fr ? <UnknownWords label="最終文（フランス語）" tokens={finalHighlights} /> : null}
-
-        <div className={`card step-card${exportDone ? ' step-done' : ''}`}>
-          <div className="step-head">
-            <h3>提出用PPTXを出力</h3>
-            {exportDone ? <span className="step-check">✓</span> : null}
+            {exportUrl ? (
+              <p>
+                <a href={exportUrl}>最新PPTXをダウンロード</a>
+              </p>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={exportPptx}
-            disabled={busy || (entry.status !== 'FINAL_FR_READY' && entry.status !== 'EXPORTED')}
-          >
-            エクスポートを生成
-          </button>
-          {exportUrl ? (
-            <p>
-              <a href={exportUrl}>最新PPTXをダウンロード</a>
-            </p>
-          ) : null}
-        </div>
+        ) : null}
 
         <div className="card">
           <h3>メモ</h3>
@@ -460,22 +522,9 @@ export function EntryWizard({ id }: { id: string }) {
           <button type="button" onClick={createMemo} disabled={busy || !memoContent.trim()}>
             メモを追加
           </button>
-
-          <hr />
           {memos.map((memo) => (
             <p key={memo.id}>{memo.content}</p>
           ))}
-        </div>
-
-        <div className="card">
-          <button
-            type="button"
-            onClick={deleteEntry}
-            disabled={busy}
-            className="btn-danger"
-          >
-            エントリー削除
-          </button>
         </div>
 
         {error ? <p className="error">{error}</p> : null}

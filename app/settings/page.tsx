@@ -11,7 +11,6 @@ type Profile = {
   display_name: string | null;
   grammatical_gender: 'male' | 'female' | 'neutral' | 'auto';
   cefr_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
-  politeness_pref: string | null;
 };
 
 export default function SettingsPage() {
@@ -125,15 +124,6 @@ export default function SettingsPage() {
               <option>C2</option>
             </select>
             <span className="field-meta">学習中の目標レベルを選択してください。</span>
-          </label>
-          <label>
-            丁寧さ（任意）
-            <input
-              value={profile.politeness_pref ?? ''}
-              onChange={(e) => setProfile({ ...profile, politeness_pref: e.target.value || null })}
-              placeholder="tu / vous など"
-            />
-            <span className="field-meta">例: 丁寧寄り / カジュアル寄り / vous固定</span>
           </label>
           <button type="submit" disabled={saving}>
             {saving ? '保存中...' : '設定を保存'}

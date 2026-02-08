@@ -16,14 +16,6 @@ type EntryItem = {
   updated_at: string;
 };
 
-const statusLabel: Record<string, string> = {
-  DRAFT_FR: '下書き作成中',
-  JP_AUTO_READY: '日本語文を確認中',
-  JP_INTENT_LOCKED: '最終文を生成中',
-  FINAL_FR_READY: '最終文の確認完了',
-  EXPORTED: 'エクスポート済み'
-};
-
 const statusOptions = [
   { value: 'ALL', label: 'すべて' },
   { value: 'DRAFT_FR', label: '下書き中' },
@@ -40,6 +32,7 @@ export function EntriesDashboard() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]['value']>('ALL');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -49,7 +42,8 @@ export function EntriesDashboard() {
 
     apiFetch<{ entries: EntryItem[] }>('/api/entries')
       .then((res) => setEntries(res.entries))
-      .catch((err) => setError(err.message));
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, [router]);
 
   const orderedEntries = useMemo(
@@ -143,7 +137,9 @@ export function EntriesDashboard() {
         </div>
 
         <div className="entry-list">
-          {filteredEntries.length ? (
+          {loading ? (
+            <p>読み込み中...</p>
+          ) : filteredEntries.length ? (
             filteredEntries.map((entry) => (
               <details key={entry.id} className="card accordion-card">
                 <summary className="accordion-head">
@@ -153,7 +149,6 @@ export function EntriesDashboard() {
                       更新: {formatUpdatedAt(entry.updated_at)}（{new Date(entry.updated_at).toLocaleString()}）
                     </div>
                   </div>
-                  <span className="badge">{statusLabel[entry.status] ?? entry.status}</span>
                 </summary>
 
                 <div className="accordion-body">
