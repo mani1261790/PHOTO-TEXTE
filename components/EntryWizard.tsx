@@ -313,6 +313,8 @@ export function EntryWizard({ id }: { id: string }) {
   const showJpIntentCard = currentIndex >= statusIndex.JP_AUTO_READY;
   const showFinalCard = currentIndex >= statusIndex.JP_INTENT_LOCKED || Boolean(entry?.final_fr);
   const showExportCard = currentIndex >= statusIndex.FINAL_FR_READY;
+  const canTranslate =
+    draftEditable && Boolean(entry?.title_fr.trim() && entry?.draft_fr.trim()) && !busy && !draftSaving;
 
   const visibleStepKey = showExportCard
     ? 'export'
@@ -439,6 +441,15 @@ export function EntryWizard({ id }: { id: string }) {
           {draftSaving ? <p className="badge">{t('自動保存しています…', 'Enregistrement auto…')}</p> : null}
           {entry.status !== 'DRAFT_FR' && entry.status !== 'JP_AUTO_READY' ? (
             <p className="badge">{t('日本語文の確定後は編集できません', 'Impossible après validation du japonais.')}</p>
+          ) : null}
+          {draftEditable ? (
+            <button
+              type="button"
+              onClick={() => updateDraftFields({ autoTranslate: true })}
+              disabled={!canTranslate}
+            >
+              {t('日本語文を生成', 'Générer le texte japonais')}
+            </button>
           ) : null}
         </div>
 

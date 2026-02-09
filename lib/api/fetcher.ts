@@ -1,4 +1,19 @@
-import { getAccessToken } from '@/lib/auth/token-store';
+import { clearAccessToken, getAccessToken } from '@/lib/auth/token-store';
+
+function handleAuthRedirect(code?: string, status?: number): boolean {
+  if (!code && status !== 401 && status !== 403) {
+    return false;
+  }
+  const isAuthError = code === 'AUTH_REQUIRED' || code === 'AUTH_INVALID';
+  if (!isAuthError && status !== 401 && status !== 403) {
+    return false;
+  }
+  clearAccessToken();
+  if (typeof window !== 'undefined') {
+    window.location.assign('/login');
+  }
+  return true;
+}
 
 export async function apiFetch<T>(
   url: string,
@@ -18,6 +33,9 @@ export async function apiFetch<T>(
 
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (handleAuthRedirect(json?.error?.code, response.status)) {
+      throw new Error('');
+    }
     const message = json?.error?.message ?? 'リクエストに失敗しました。';
     throw new Error(message);
   }
@@ -40,6 +58,9 @@ export async function apiFetchForm<T>(url: string, formData: FormData): Promise<
 
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (handleAuthRedirect(json?.error?.code, response.status)) {
+      throw new Error('');
+    }
     throw new Error(json?.error?.message ?? 'リクエストに失敗しました。');
   }
 
