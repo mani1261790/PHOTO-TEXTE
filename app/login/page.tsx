@@ -24,6 +24,7 @@ function LoginContent() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   function switchMode(nextMode: 'login' | 'signup') {
@@ -46,6 +47,7 @@ function LoginContent() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setBusy(true);
 
     try {
@@ -71,10 +73,21 @@ function LoginContent() {
       }
 
       if (!json.access_token) {
+        if (mode === 'signup') {
+          setNotice(
+            t(
+              '確認メールを送信しました。メール内のリンクで確認を完了した後、この画面でログインしてください。',
+              "E-mail de confirmation envoyé. Ouvrez le lien, puis connectez-vous ici."
+            )
+          );
+          switchMode('login');
+          return;
+        }
+
         setError(
           t(
-            'アクセストークンを取得できませんでした。メール確認設定を確認してください。',
-            "Impossible d'obtenir le jeton. Vérifiez la validation par e-mail."
+            'アクセストークンを取得できませんでした。しばらくしてから再度お試しください。',
+            "Impossible d'obtenir le jeton. Réessayez plus tard."
           )
         );
         return;
@@ -103,7 +116,11 @@ function LoginContent() {
           <button
             type="button"
             className={mode === 'login' ? '' : 'btn-secondary'}
-            onClick={() => switchMode('login')}
+            onClick={() => {
+              setError(null);
+              setNotice(null);
+              switchMode('login');
+            }}
             disabled={busy}
           >
             {t('ログイン', 'Connexion')}
@@ -111,7 +128,11 @@ function LoginContent() {
           <button
             type="button"
             className={mode === 'signup' ? '' : 'btn-secondary'}
-            onClick={() => switchMode('signup')}
+            onClick={() => {
+              setError(null);
+              setNotice(null);
+              switchMode('signup');
+            }}
             disabled={busy}
           >
             {t('新規登録', 'Créer un compte')}
@@ -158,6 +179,7 @@ function LoginContent() {
                 : t('アカウント作成', 'Créer un compte')}
           </button>
         </form>
+        {notice ? <p className="info-chip">{notice}</p> : null}
         {error ? <p className="error">{error}</p> : null}
       </div>
     </div>

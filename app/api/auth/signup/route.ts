@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = signUpResult.data.user;
+    const session = signUpResult.data.session ?? null;
     const dataKey = generateDataKey();
     const wrappedDataKey = wrapDataKey(dataKey);
     const emailEncrypted = encryptField(dataKey, payload.email);
@@ -44,8 +45,9 @@ export async function POST(req: NextRequest) {
 
     return ok({
       user_id: user.id,
-      access_token: signUpResult.data.session?.access_token ?? null,
-      refresh_token: signUpResult.data.session?.refresh_token ?? null
+      access_token: session?.access_token ?? null,
+      refresh_token: session?.refresh_token ?? null,
+      email_confirmation_required: session == null
     }, 201);
   } catch (error) {
     return handleApiError(error);
