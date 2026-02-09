@@ -170,6 +170,12 @@ p {
   font-size: 14px;
 }
 
+.topnav-auth-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .topnav-toggle {
   display: none;
 }
@@ -883,6 +889,11 @@ button[disabled] {
     margin-top: 10px;
     flex-direction: column;
     align-items: stretch;
+    gap: 8px;
+  }
+
+  .topnav-auth-links {
+    display: grid;
     gap: 8px;
   }
 

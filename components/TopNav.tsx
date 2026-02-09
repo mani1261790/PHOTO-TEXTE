@@ -90,9 +90,14 @@ export function TopNav() {
               </button>
             </>
           ) : (
-            <Link href="/login" onClick={closeMenu}>
-              {t('ログイン・新規登録', 'Connexion / Inscription')}
-            </Link>
+            <div className="topnav-auth-links">
+              <Link href="/login" onClick={closeMenu}>
+                {t('ログイン', 'Connexion')}
+              </Link>
+              <Link href="/login?mode=signup" onClick={closeMenu}>
+                {t('新規登録', 'Créer un compte')}
+              </Link>
+            </div>
           )}
         </nav>
       </div>
