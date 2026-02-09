@@ -10,7 +10,9 @@ function handleAuthRedirect(code?: string, status?: number): boolean {
   }
   clearAccessToken();
   if (typeof window !== 'undefined') {
-    window.location.assign('/login');
+    if (window.location.pathname !== '/login') {
+      window.location.assign('/login');
+    }
   }
   return true;
 }
