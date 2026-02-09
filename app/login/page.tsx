@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
@@ -14,14 +14,22 @@ type ProfileCheck = {
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { language } = useLanguage();
   const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup'>(
+    searchParams.get('mode') === 'signup' ? 'signup' : 'login'
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  function switchMode(nextMode: 'login' | 'signup') {
+    setMode(nextMode);
+    router.replace(nextMode === 'signup' ? '/login?mode=signup' : '/login');
+  }
 
   async function routeAfterLogin() {
     try {
@@ -95,7 +103,7 @@ export default function LoginPage() {
           <button
             type="button"
             className={mode === 'login' ? '' : 'btn-secondary'}
-            onClick={() => setMode('login')}
+            onClick={() => switchMode('login')}
             disabled={busy}
           >
             {t('ログイン', 'Connexion')}
@@ -103,7 +111,7 @@ export default function LoginPage() {
           <button
             type="button"
             className={mode === 'signup' ? '' : 'btn-secondary'}
-            onClick={() => setMode('signup')}
+            onClick={() => switchMode('signup')}
             disabled={busy}
           >
             {t('新規登録', 'Créer un compte')}
