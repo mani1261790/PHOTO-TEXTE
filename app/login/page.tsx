@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FormEvent, useState } from 'react';
+import { FormEvent, Suspense, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
 import { setAccessToken } from '@/lib/auth/token-store';
@@ -12,7 +12,7 @@ type ProfileCheck = {
   updated_at: string | null;
 };
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { language } = useLanguage();
@@ -161,5 +161,13 @@ export default function LoginPage() {
         {error ? <p className="error">{error}</p> : null}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="page-stack" />}>
+      <LoginContent />
+    </Suspense>
   );
 }
