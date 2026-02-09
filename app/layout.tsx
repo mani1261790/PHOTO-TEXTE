@@ -1,6 +1,7 @@
 import './globals.css';
 
 import type { Metadata } from 'next';
+import { LanguageProvider } from '@/components/LanguageProvider';
 import { TopNav } from '@/components/TopNav';
 
 export const metadata: Metadata = {
@@ -12,8 +13,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja">
       <body>
-        <TopNav />
-        <main>{children}</main>
+        <LanguageProvider>
+          <TopNav />
+          <main>{children}</main>
+        </LanguageProvider>
       </body>
     </html>
   );

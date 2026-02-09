@@ -16,6 +16,7 @@ export interface UserProfile {
   grammatical_gender: GrammaticalGender;
   cefr_level: CEFRLevel;
   politeness_pref: string | null;
+  service_language: 'ja' | 'fr';
   email_encrypted: string;
   wrapped_data_key: string;
   created_at: string;

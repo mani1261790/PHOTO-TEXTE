@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { HighlightToken } from '@/lib/cefr/vocab';
+import { useLanguage } from '@/components/LanguageProvider';
 
 export function UnknownWords({
   label,
@@ -11,6 +12,8 @@ export function UnknownWords({
   label: string;
   tokens: HighlightToken[];
 }) {
+  const { language } = useLanguage();
+  const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const [selected, setSelected] = useState<HighlightToken | null>(null);
 
   const unknownCount = useMemo(
@@ -21,7 +24,7 @@ export function UnknownWords({
   return (
     <div className="card">
       <h4>
-        {label} <span className="badge">未知語: {unknownCount}</span>
+        {label} <span className="badge">{t('未知語', 'Mots inconnus')}: {unknownCount}</span>
       </h4>
       <p>
         {tokens.map((token, idx) => {

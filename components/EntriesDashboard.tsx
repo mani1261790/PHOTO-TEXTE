@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
+import { useLanguage } from '@/components/LanguageProvider';
 
 type EntryItem = {
   id: string;
@@ -16,17 +17,18 @@ type EntryItem = {
   updated_at: string;
 };
 
-const statusOptions = [
-  { value: 'ALL', label: 'すべて' },
-  { value: 'DRAFT_FR', label: '下書き中' },
-  { value: 'JP_AUTO_READY', label: '日本語文確認' },
-  { value: 'JP_INTENT_LOCKED', label: '最終文生成中' },
-  { value: 'FINAL_FR_READY', label: '提出準備完了' },
-  { value: 'EXPORTED', label: '出力済み' }
-] as const;
-
 export function EntriesDashboard() {
   const router = useRouter();
+  const { language } = useLanguage();
+  const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
+  const statusOptions = [
+    { value: 'ALL', label: t('すべて', 'Tous') },
+    { value: 'DRAFT_FR', label: t('下書き中', 'Brouillon') },
+    { value: 'JP_AUTO_READY', label: t('日本語文確認', 'Vérif. JP') },
+    { value: 'JP_INTENT_LOCKED', label: t('最終文生成中', 'Final en cours') },
+    { value: 'FINAL_FR_READY', label: t('提出準備完了', 'Prêt à remettre') },
+    { value: 'EXPORTED', label: t('出力済み', 'Exporté') }
+  ] as const;
   const [entries, setEntries] = useState<EntryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -64,7 +66,10 @@ export function EntriesDashboard() {
   async function deleteEntry(entry: EntryItem) {
     if (
       !confirm(
-        `「${entry.title_fr}」を削除します。写真・メモ・エクスポートも削除されます。よろしいですか？`
+        t(
+          `「${entry.title_fr}」を削除します。写真・メモ・エクスポートも削除されます。よろしいですか？`,
+          `Supprimer « ${entry.title_fr} » ? Les photos, notes et exports seront aussi supprimés.`
+        )
       )
     ) {
       return;
@@ -88,28 +93,32 @@ export function EntriesDashboard() {
     const hour = minute * 60;
     const day = hour * 24;
     if (diffMs < hour) {
-      return `${Math.max(1, Math.floor(diffMs / minute))}分前`;
+      return language === 'fr'
+        ? `il y a ${Math.max(1, Math.floor(diffMs / minute))} min`
+        : `${Math.max(1, Math.floor(diffMs / minute))}分前`;
     }
     if (diffMs < day) {
-      return `${Math.floor(diffMs / hour)}時間前`;
+      return language === 'fr'
+        ? `il y a ${Math.floor(diffMs / hour)} h`
+        : `${Math.floor(diffMs / hour)}時間前`;
     }
-    return `${Math.floor(diffMs / day)}日前`;
+    return language === 'fr' ? `il y a ${Math.floor(diffMs / day)} j` : `${Math.floor(diffMs / day)}日前`;
   }
 
   return (
     <div className="page-stack">
       <div className="card panel-highlight">
         <div className="section-head entries-head">
-          <h1>エントリー一覧</h1>
-          <span className="badge">全 {entries.length} 件</span>
+          <h1>{t('エントリー一覧', 'Entrées')}</h1>
+          <span className="badge">{t(`全 ${entries.length} 件`, `Total ${entries.length}`)}</span>
         </div>
       </div>
 
-      <Link href="/entries/new" className="fab-add" aria-label="新規エントリー作成">
+      <Link href="/entries/new" className="fab-add" aria-label={t('新規エントリー作成', 'Nouvelle entrée')}>
         <span className="fab-add-icon" aria-hidden>
           ＋
         </span>
-        <span className="fab-add-text">新規</span>
+        <span className="fab-add-text">{t('新規', 'Nouveau')}</span>
       </Link>
 
       {error ? <p className="error">{error}</p> : null}
@@ -117,15 +126,15 @@ export function EntriesDashboard() {
       <div className="card">
         <div className="list-toolbar">
           <label>
-            検索
+            {t('検索', 'Recherche')}
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="タイトルや最終文で検索"
+              placeholder={t('タイトルや最終文で検索', 'Titre ou texte final')}
             />
           </label>
           <label>
-            ステータス
+            {t('ステータス', 'Statut')}
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}>
               {statusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -138,7 +147,7 @@ export function EntriesDashboard() {
 
         <div className="entry-list">
           {loading ? (
-            <p>読み込み中...</p>
+            <p>{t('読み込み中...', 'Chargement...')}</p>
           ) : filteredEntries.length ? (
             filteredEntries.map((entry) => (
               <details key={entry.id} className="card accordion-card">
@@ -146,7 +155,8 @@ export function EntriesDashboard() {
                   <div>
                     <strong>{entry.title_fr}</strong>
                     <div className="timeline-detail">
-                      更新: {formatUpdatedAt(entry.updated_at)}（{new Date(entry.updated_at).toLocaleString()}）
+                      {t('更新', 'Mis à jour')}:{' '}
+                      {formatUpdatedAt(entry.updated_at)}（{new Date(entry.updated_at).toLocaleString()}）
                     </div>
                   </div>
                 </summary>
@@ -162,21 +172,21 @@ export function EntriesDashboard() {
                   ) : null}
 
                   <div>
-                    <h4>最終フランス語</h4>
-                    <p>{entry.final_fr ?? 'まだ最終文は生成されていません。'}</p>
+                    <h4>{t('最終フランス語', 'Français final')}</h4>
+                    <p>{entry.final_fr ?? t('まだ最終文は生成されていません。', 'Le texte final n’est pas prêt.')}</p>
                     <div className="entry-actions">
                       <Link href={`/entries/${entry.id}`} className="entry-open-btn">
-                        このエントリーを開く
+                        {t('このエントリーを開く', 'Ouvrir cette entrée')}
                       </Link>
                       <button
                         type="button"
                         className="entry-delete-icon"
                         onClick={() => void deleteEntry(entry)}
                         disabled={deletingId === entry.id}
-                        aria-label="このエントリーを削除"
-                        title="このエントリーを削除"
+                        aria-label={t('このエントリーを削除', 'Supprimer cette entrée')}
+                        title={t('このエントリーを削除', 'Supprimer cette entrée')}
                       >
-                        {deletingId === entry.id ? '…' : '🗑'}
+                        {deletingId === entry.id ? t('…', '…') : '🗑'}
                       </button>
                     </div>
                   </div>
@@ -184,7 +194,7 @@ export function EntriesDashboard() {
               </details>
             ))
           ) : (
-            <p>条件に合うエントリーがありません。</p>
+            <p>{t('条件に合うエントリーがありません。', 'Aucune entrée ne correspond aux critères.')}</p>
           )}
         </div>
       </div>

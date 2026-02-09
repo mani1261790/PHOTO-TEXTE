@@ -5,9 +5,12 @@ import { FormEvent, useEffect, useState } from 'react';
 
 import { apiFetch, apiFetchForm } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
+import { useLanguage } from '@/components/LanguageProvider';
 
 export default function NewEntryPage() {
   const router = useRouter();
+  const { language } = useLanguage();
+  const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const [titleFr, setTitleFr] = useState('');
   const [draftFr, setDraftFr] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -23,7 +26,7 @@ export default function NewEntryPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!file) {
-      setError('写真を選択してください。');
+      setError(t('写真を選択してください。', 'Veuillez sélectionner une photo.'));
       return;
     }
 
@@ -57,36 +60,38 @@ export default function NewEntryPage() {
   return (
     <div className="page-stack">
       <div className="card form-card new-entry-simple">
-        <h1>新規エントリー作成</h1>
-        <p className="timeline-detail">写真・タイトル・下書き本文を入力してください。</p>
+        <h1>{t('新規エントリー作成', 'Créer une entrée')}</h1>
+        <p className="timeline-detail">
+          {t('写真・タイトル・下書き本文を入力してください。', 'Saisissez la photo, le titre et le brouillon.')}
+        </p>
         <form onSubmit={onSubmit}>
           <label>
-            フランス語タイトル
+            {t('フランス語タイトル', 'Titre en français')}
             <input value={titleFr} onChange={(e) => setTitleFr(e.target.value)} required maxLength={200} />
           </label>
           <label>
-            フランス語ドラフト
+            {t('フランス語ドラフト', 'Brouillon en français')}
             <textarea
               value={draftFr}
               onChange={(e) => setDraftFr(e.target.value)}
               rows={8}
               required
               maxLength={8000}
-              placeholder="例: 今日、私は学校の帰り道で夕焼けを見た。"
+              placeholder={t('例: 今日、私は学校の帰り道で夕焼けを見た。', "Ex : J'ai vu un coucher de soleil.")}
             />
           </label>
           <label>
-            写真
+            {t('写真', 'Photo')}
             <input
               type="file"
               accept="image/*"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               required
             />
-            {file ? <span className="field-meta">選択中: {file.name}</span> : null}
+            {file ? <span className="field-meta">{t('選択中:', 'Sélectionné :')} {file.name}</span> : null}
           </label>
           <button type="submit" disabled={!canSubmit}>
-            {busy ? '作成中...' : '作成して次へ'}
+            {busy ? t('作成中...', 'Création...') : t('作成して次へ', 'Créer et continuer')}
           </button>
         </form>
         {error ? <p className="error">{error}</p> : null}

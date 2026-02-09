@@ -5,6 +5,7 @@ import { FormEvent, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
 import { setAccessToken } from '@/lib/auth/token-store';
+import { useLanguage } from '@/components/LanguageProvider';
 
 type ProfileCheck = {
   created_at: string | null;
@@ -13,6 +14,8 @@ type ProfileCheck = {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { language } = useLanguage();
+  const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,12 +58,17 @@ export default function LoginPage() {
 
       const json = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(json?.error?.message ?? '認証に失敗しました。');
+        setError(json?.error?.message ?? t('認証に失敗しました。', "Échec de l'authentification."));
         return;
       }
 
       if (!json.access_token) {
-        setError('アクセストークンを取得できませんでした。メール確認設定を確認してください。');
+        setError(
+          t(
+            'アクセストークンを取得できませんでした。メール確認設定を確認してください。',
+            "Impossible d'obtenir le jeton. Vérifiez la validation par e-mail."
+          )
+        );
         return;
       }
 
@@ -74,8 +82,13 @@ export default function LoginPage() {
   return (
     <div className="page-stack">
       <div className="card panel-highlight">
-        <h1>はじめる</h1>
-        <p>ログイン後は「設定 → 新規エントリー作成」の順で進めるとスムーズです。</p>
+        <h1>{t('はじめる', 'Commencer')}</h1>
+        <p>
+          {t(
+            'ログイン後は「設定 → 新規エントリー作成」の順で進めるとスムーズです。',
+            "Après connexion, suivez « Paramètres → Nouvelle entrée »."
+          )}
+        </p>
       </div>
       <div className="card">
         <div className="auth-switch">
@@ -85,7 +98,7 @@ export default function LoginPage() {
             onClick={() => setMode('login')}
             disabled={busy}
           >
-            ログイン
+            {t('ログイン', 'Connexion')}
           </button>
           <button
             type="button"
@@ -93,12 +106,12 @@ export default function LoginPage() {
             onClick={() => setMode('signup')}
             disabled={busy}
           >
-            新規登録
+            {t('新規登録', 'Créer un compte')}
           </button>
         </div>
         <form onSubmit={onSubmit}>
           <label>
-            メールアドレス
+            {t('メールアドレス', 'Adresse e-mail')}
             <input
               type="email"
               value={email}
@@ -108,7 +121,7 @@ export default function LoginPage() {
             />
           </label>
           <label>
-            パスワード
+            {t('パスワード', 'Mot de passe')}
             <input
               type="password"
               value={password}
@@ -120,7 +133,7 @@ export default function LoginPage() {
           </label>
           {mode === 'signup' ? (
             <label>
-              表示名（任意）
+              {t('表示名（任意）', 'Nom affiché (optionnel)')}
               <input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
@@ -130,7 +143,11 @@ export default function LoginPage() {
             </label>
           ) : null}
           <button type="submit" disabled={busy}>
-            {busy ? '処理中...' : mode === 'login' ? 'ログイン' : 'アカウント作成'}
+            {busy
+              ? t('処理中...', 'Traitement...')
+              : mode === 'login'
+                ? t('ログイン', 'Connexion')
+                : t('アカウント作成', 'Créer un compte')}
           </button>
         </form>
         {error ? <p className="error">{error}</p> : null}
