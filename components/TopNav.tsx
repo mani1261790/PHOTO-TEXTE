@@ -10,10 +10,13 @@ import {
   getAccessToken
 } from '@/lib/auth/token-store';
 import { LogoMark } from '@/components/LogoMark';
+import { useLanguage } from '@/components/LanguageProvider';
 
 export function TopNav() {
   const router = useRouter();
   const pathname = usePathname();
+  const { language } = useLanguage();
+  const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const [isAuthed, setIsAuthed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -59,7 +62,7 @@ export function TopNav() {
           <button
             type="button"
             className="topnav-toggle"
-            aria-label={menuOpen ? 'メニューを閉じる' : 'メニューを開く'}
+            aria-label={menuOpen ? t('メニューを閉じる', 'Fermer le menu') : t('メニューを開く', 'Ouvrir le menu')}
             aria-expanded={menuOpen}
             aria-controls="primary-menu"
             onClick={() => setMenuOpen((current) => !current)}
@@ -72,23 +75,23 @@ export function TopNav() {
         <nav
           id="primary-menu"
           className={`topnav-links${menuOpen ? ' open' : ''}`}
-          aria-label="主要メニュー"
+          aria-label={t('主要メニュー', 'Menu principal')}
         >
           {isAuthed ? (
             <>
               <Link href="/" onClick={closeMenu}>
-                エントリー一覧
+                {t('エントリー一覧', 'Entrées')}
               </Link>
               <Link href="/settings" onClick={closeMenu}>
-                設定
+                {t('設定', 'Paramètres')}
               </Link>
               <button type="button" className="topnav-action" onClick={handleLogout}>
-                ログアウト
+                {t('ログアウト', 'Déconnexion')}
               </button>
             </>
           ) : (
             <Link href="/login" onClick={closeMenu}>
-              ログイン・新規登録
+              {t('ログイン・新規登録', 'Connexion / Inscription')}
             </Link>
           )}
         </nav>

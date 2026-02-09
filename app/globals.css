@@ -534,12 +534,18 @@ button[disabled] {
 }
 
 .diff-block {
+  font-family: inherit;
   white-space: pre-wrap;
   line-height: 1.7;
   background: #fafafa;
   border: 1px solid var(--theme-border);
   border-radius: 10px;
   padding: 12px;
+}
+
+.auto-grow {
+  overflow: hidden;
+  resize: none;
 }
 
 .unknown-btn {

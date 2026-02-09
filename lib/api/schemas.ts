@@ -5,7 +5,8 @@ export const profileUpdateSchema = z.object({
   display_name: z.string().max(80).optional().nullable(),
   grammatical_gender: z.enum(['male', 'female', 'neutral', 'auto']),
   cefr_level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']),
-  politeness_pref: z.string().max(32).optional().nullable()
+  politeness_pref: z.string().max(32).optional().nullable(),
+  service_language: z.enum(['ja', 'fr'])
 });
 
 export const createEntrySchema = z.object({
@@ -39,7 +40,8 @@ export const signupSchema = z.object({
   display_name: z.string().max(80).optional(),
   grammatical_gender: z.enum(['male', 'female', 'neutral', 'auto']).default('auto'),
   cefr_level: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']).default('A2'),
-  politeness_pref: z.string().max(32).optional().nullable()
+  politeness_pref: z.string().max(32).optional().nullable(),
+  service_language: z.enum(['ja', 'fr']).default('ja')
 });
 
 export const loginSchema = z.object({

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
 import { DiffToken } from '@/lib/diff/read-only';
+import { useLanguage } from '@/components/LanguageProvider';
 
 import { UnknownWords } from '@/components/UnknownWords';
 
@@ -33,18 +34,6 @@ type HighlightToken = {
   meaning?: string;
 };
 
-const steps = [
-  { key: 'DRAFT_FR', title: '1. 下書きを入力', detail: 'タイトルと本文を入力すると自動保存されます' },
-  {
-    key: 'JP_AUTO_READY',
-    title: '2. 日本語文を確認',
-    detail: 'フランス語の下書きから自動で日本語文を作成します'
-  },
-  { key: 'JP_INTENT_LOCKED', title: '3. 日本語文を確定', detail: '確定後に最終フランス語を生成します' },
-  { key: 'FINAL_FR_READY', title: '4. 最終文を確認', detail: '最終文は自動生成され、編集できません' },
-  { key: 'EXPORTED', title: '5. 提出資料を出力', detail: 'PPTXをダウンロードして提出します' }
-] as const;
-
 const statusIndex: Record<Entry['status'], number> = {
   DRAFT_FR: 0,
   JP_AUTO_READY: 1,
@@ -53,16 +42,50 @@ const statusIndex: Record<Entry['status'], number> = {
   EXPORTED: 4
 };
 
-const statusLabel: Record<Entry['status'], string> = {
-  DRAFT_FR: '下書き入力中',
-  JP_AUTO_READY: '日本語文を確認中',
-  JP_INTENT_LOCKED: '最終文を生成中',
-  FINAL_FR_READY: '最終文の確認完了',
-  EXPORTED: '提出資料を出力済み'
-};
-
 export function EntryWizard({ id }: { id: string }) {
   const router = useRouter();
+  const { language } = useLanguage();
+  const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
+  const steps = useMemo(
+    () => [
+      {
+        key: 'DRAFT_FR',
+        title: t('1. 下書きを入力', '1. Saisir le brouillon'),
+        detail: t('タイトルと本文を入力すると自動保存されます', 'Le titre et le texte sont enregistrés automatiquement.')
+      },
+      {
+        key: 'JP_AUTO_READY',
+        title: t('2. 日本語文を確認', '2. Vérifier le texte japonais'),
+        detail: t('フランス語の下書きから自動で日本語文を作成します', 'Le japonais est généré depuis le brouillon français.')
+      },
+      {
+        key: 'JP_INTENT_LOCKED',
+        title: t('3. 日本語文を確定', '3. Valider le texte japonais'),
+        detail: t('確定後に最終フランス語を生成します', 'La validation déclenche la génération du français final.')
+      },
+      {
+        key: 'FINAL_FR_READY',
+        title: t('4. 最終文を確認', '4. Vérifier le texte final'),
+        detail: t('最終文は自動生成され、編集できません', 'Le texte final est généré automatiquement et non modifiable.')
+      },
+      {
+        key: 'EXPORTED',
+        title: t('5. 提出資料を出力', '5. Exporter le dossier'),
+        detail: t('PPTXをダウンロードして提出します', 'Téléchargez le PPTX pour le rendre.')
+      }
+    ],
+    [language]
+  );
+  const statusLabel: Record<Entry['status'], string> = useMemo(
+    () => ({
+      DRAFT_FR: t('下書き入力中', 'Brouillon en cours'),
+      JP_AUTO_READY: t('日本語文を確認中', 'Vérif. du japonais'),
+      JP_INTENT_LOCKED: t('最終文を生成中', 'Final en cours'),
+      FINAL_FR_READY: t('最終文の確認完了', 'Final validé'),
+      EXPORTED: t('提出資料を出力済み', 'Export effectué')
+    }),
+    [language]
+  );
   const [entry, setEntry] = useState<Entry | null>(null);
   const [memos, setMemos] = useState<Memo[]>([]);
   const [jpIntentDraft, setJpIntentDraft] = useState('');
@@ -83,6 +106,7 @@ export function EntryWizard({ id }: { id: string }) {
   const jpIntentCardRef = useRef<HTMLDivElement | null>(null);
   const finalCardRef = useRef<HTMLDivElement | null>(null);
   const exportCardRef = useRef<HTMLDivElement | null>(null);
+  const finalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const initializedVisibleStepRef = useRef(false);
   const previousVisibleStepRef = useRef<string>('draft');
 
@@ -94,7 +118,7 @@ export function EntryWizard({ id }: { id: string }) {
   const progress = useMemo(() => {
     if (!entry) return 0;
     return Math.round(((statusIndex[entry.status] + 1) / steps.length) * 100);
-  }, [entry]);
+  }, [entry, steps.length]);
 
   const unknownWordCount = useMemo(
     () =>
@@ -162,6 +186,15 @@ export function EntryWizard({ id }: { id: string }) {
       }
     };
   }, [entry, draftEditable]);
+
+  useEffect(() => {
+    if (showDiff) return;
+    if (!entry?.final_fr) return;
+    const el = finalTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [entry?.final_fr, showDiff]);
 
   async function updateDraftFields(options?: { autoTranslate?: boolean; silent?: boolean }) {
     if (!entry || !draftEditable) return;
@@ -322,14 +355,14 @@ export function EntryWizard({ id }: { id: string }) {
   }, [entry, visibleStepKey]);
 
   if (!entry) {
-    return <div className="card">エントリーを読み込み中...</div>;
+    return <div className="card">{t('エントリーを読み込み中...', 'Chargement de l’entrée...')}</div>;
   }
 
   return (
     <div className="wizard-shell">
       <aside className="card timeline desktop-only">
-        <h3>進捗</h3>
-        <p className="badge">{progress}% 完了</p>
+        <h3>{t('進捗', 'Progression')}</h3>
+        <p className="badge">{t(`${progress}% 完了`, `${progress}% terminé`)}</p>
         {steps.map((step, index) => {
           const className =
             index < currentIndex
@@ -345,14 +378,14 @@ export function EntryWizard({ id }: { id: string }) {
           );
         })}
         <p>
-          <Link href="/">一覧に戻る</Link>
+          <Link href="/">{t('一覧に戻る', 'Retour à la liste')}</Link>
         </p>
       </aside>
 
       <section>
         <div className="mobile-progress">
           <div className="mobile-progress-row">
-            <strong>進捗 {progress}%</strong>
+            <strong>{t(`進捗 ${progress}%`, `Progression ${progress}%`)}</strong>
             <span className="badge">{statusLabel[entry.status]}</span>
           </div>
           <div className="progress-track" aria-hidden>
@@ -367,15 +400,15 @@ export function EntryWizard({ id }: { id: string }) {
           </div>
           <div className="metric-grid">
             <div className="metric">
-              <span>進捗</span>
+              <span>{t('進捗', 'Progression')}</span>
               <strong>{progress}%</strong>
             </div>
             <div className="metric">
-              <span>未知語</span>
+              <span>{t('未知語', 'Mots inconnus')}</span>
               <strong>{unknownWordCount}</strong>
             </div>
             <div className="metric">
-              <span>メモ</span>
+              <span>{t('メモ', 'Notes')}</span>
               <strong>{memos.length}</strong>
             </div>
           </div>
@@ -383,11 +416,11 @@ export function EntryWizard({ id }: { id: string }) {
 
         <div ref={draftCardRef} className={`card step-card${draftDone ? ' step-done' : ''}`}>
           <div className="step-head">
-            <h3>下書き入力</h3>
+            <h3>{t('下書き入力', 'Brouillon')}</h3>
             {draftDone ? <span className="step-check">✓</span> : null}
           </div>
           <label>
-            タイトル（フランス語）
+            {t('タイトル（フランス語）', 'Titre (français)')}
             <input
               value={entry.title_fr}
               onChange={(e) => setEntry({ ...entry, title_fr: e.target.value })}
@@ -395,7 +428,7 @@ export function EntryWizard({ id }: { id: string }) {
             />
           </label>
           <label>
-            下書き本文（フランス語）
+            {t('下書き本文（フランス語）', 'Texte du brouillon (français)')}
             <textarea
               rows={6}
               value={entry.draft_fr}
@@ -403,16 +436,16 @@ export function EntryWizard({ id }: { id: string }) {
               disabled={!draftEditable || busy}
             />
           </label>
-          {draftSaving ? <p className="badge">自動保存しています…</p> : null}
+          {draftSaving ? <p className="badge">{t('自動保存しています…', 'Enregistrement auto…')}</p> : null}
           {entry.status !== 'DRAFT_FR' && entry.status !== 'JP_AUTO_READY' ? (
-            <p className="badge">日本語文の確定後は編集できません</p>
+            <p className="badge">{t('日本語文の確定後は編集できません', 'Impossible après validation du japonais.')}</p>
           ) : null}
         </div>
 
         {showJpAutoCard ? (
           <div ref={jpAutoCardRef} className={`card step-card${jpAutoDone ? ' step-done' : ''}`}>
             <div className="step-head">
-              <h3>日本語文</h3>
+              <h3>{t('日本語文', 'Texte japonais')}</h3>
               {jpAutoDone ? <span className="step-check">✓</span> : null}
             </div>
             <textarea rows={6} value={entry.jp_auto ?? ''} readOnly />
@@ -422,7 +455,7 @@ export function EntryWizard({ id }: { id: string }) {
         {showJpIntentCard ? (
           <div ref={jpIntentCardRef} className={`card step-card${jpIntentDone ? ' step-done' : ''}`}>
             <div className="step-head">
-              <h3>日本語文を確定</h3>
+              <h3>{t('日本語文を確定', 'Valider le texte japonais')}</h3>
               {jpIntentDone ? <span className="step-check">✓</span> : null}
             </div>
             {entry.status === 'JP_AUTO_READY' ? (
@@ -433,7 +466,7 @@ export function EntryWizard({ id }: { id: string }) {
                   onChange={(e) => setJpIntentDraft(e.target.value)}
                 />
                 <button type="button" onClick={lockIntent} disabled={busy || !jpIntentDraft.trim()}>
-                  日本語文を確定
+                  {t('日本語文を確定', 'Valider le texte japonais')}
                 </button>
               </>
             ) : (
@@ -445,11 +478,11 @@ export function EntryWizard({ id }: { id: string }) {
         {showFinalCard ? (
           <div ref={finalCardRef} className={`card step-card${finalDone ? ' step-done' : ''}`}>
             <div className="step-head">
-              <h3>最終フランス語</h3>
+              <h3>{t('最終フランス語', 'Français final')}</h3>
               {finalDone ? <span className="step-check">✓</span> : null}
             </div>
             {entry.status === 'JP_INTENT_LOCKED' && !entry.final_fr ? (
-              <p className="badge">最終フランス語を自動生成しています…</p>
+              <p className="badge">{t('最終フランス語を自動生成しています…', 'Génération du français final…')}</p>
             ) : null}
             {showDiff && diffTokens.length ? (
               <pre className="diff-block diff-inline">
@@ -472,7 +505,13 @@ export function EntryWizard({ id }: { id: string }) {
                 })}
               </pre>
             ) : (
-              <textarea rows={7} value={entry.final_fr ?? ''} readOnly />
+              <textarea
+                ref={finalTextareaRef}
+                className="auto-grow"
+                rows={1}
+                value={entry.final_fr ?? ''}
+                readOnly
+              />
             )}
             {entry.final_fr ? (
               <button
@@ -480,23 +519,23 @@ export function EntryWizard({ id }: { id: string }) {
                 className="btn-secondary"
                 onClick={() => setShowDiff((current) => !current)}
               >
-                {showDiff ? '差分を隠す' : '差分を表示'}
+                {showDiff ? t('差分を隠す', 'Masquer le diff') : t('差分を表示', 'Afficher le diff')}
               </button>
             ) : null}
           </div>
         ) : null}
 
         {showFinalCard && entry.final_fr ? (
-          <UnknownWords label="下書きのフランス語" tokens={draftHighlights} />
+          <UnknownWords label={t('下書きのフランス語', 'Français du brouillon')} tokens={draftHighlights} />
         ) : null}
         {showFinalCard && entry.final_fr ? (
-          <UnknownWords label="最終文のフランス語" tokens={finalHighlights} />
+          <UnknownWords label={t('最終文のフランス語', 'Français final')} tokens={finalHighlights} />
         ) : null}
 
         {showExportCard ? (
           <div ref={exportCardRef} className={`card step-card${exportDone ? ' step-done' : ''}`}>
             <div className="step-head">
-              <h3>提出用PPTXを出力</h3>
+              <h3>{t('提出用PPTXを出力', 'Exporter le PPTX')}</h3>
               {exportDone ? <span className="step-check">✓</span> : null}
             </div>
             <button
@@ -504,26 +543,26 @@ export function EntryWizard({ id }: { id: string }) {
               onClick={exportPptx}
               disabled={busy || (entry.status !== 'FINAL_FR_READY' && entry.status !== 'EXPORTED')}
             >
-              エクスポートを生成
+              {t('エクスポートを生成', "Générer l'export")}
             </button>
             {exportUrl ? (
               <p>
-                <a href={exportUrl}>最新PPTXをダウンロード</a>
+                <a href={exportUrl}>{t('最新PPTXをダウンロード', 'Télécharger le PPTX')}</a>
               </p>
             ) : null}
           </div>
         ) : null}
 
         <div className="card">
-          <h3>メモ</h3>
+          <h3>{t('メモ', 'Notes')}</h3>
           <textarea
             rows={4}
             value={memoContent}
             onChange={(e) => setMemoContent(e.target.value)}
-            placeholder="先生からの指摘や自分用メモを入力"
+            placeholder={t('先生からの指摘や自分用メモを入力', 'Saisissez les remarques ou notes personnelles')}
           />
           <button type="button" onClick={createMemo} disabled={busy || !memoContent.trim()}>
-            メモを追加
+            {t('メモを追加', 'Ajouter une note')}
           </button>
           {memos.map((memo) => (
             <p key={memo.id}>{memo.content}</p>

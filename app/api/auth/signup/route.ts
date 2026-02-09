@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
       display_name: payload.display_name ?? null,
       grammatical_gender: payload.grammatical_gender,
       cefr_level: payload.cefr_level,
-      politeness_pref: payload.politeness_pref ?? null
+      politeness_pref: payload.politeness_pref ?? null,
+      service_language: payload.service_language
     });
 
     if (profileError) {

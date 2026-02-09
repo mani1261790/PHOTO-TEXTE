@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     const { user, client } = await authedClient(req);
     const { data, error } = await client
       .from('user_profiles')
-      .select('id,display_name,grammatical_gender,cefr_level,politeness_pref,created_at,updated_at')
+      .select('id,display_name,grammatical_gender,cefr_level,politeness_pref,service_language,created_at,updated_at')
       .eq('id', user.id)
       .single();
 
@@ -52,7 +52,8 @@ export async function PUT(req: NextRequest) {
       display_name: payload.display_name ?? null,
       grammatical_gender: payload.grammatical_gender,
       cefr_level: payload.cefr_level,
-      politeness_pref: payload.politeness_pref ?? null
+      politeness_pref: payload.politeness_pref ?? null,
+      service_language: payload.service_language
     };
 
     let nextEmail: string | undefined;
@@ -81,7 +82,7 @@ export async function PUT(req: NextRequest) {
       .from('user_profiles')
       .update(updateBody)
       .eq('id', user.id)
-      .select('id,display_name,grammatical_gender,cefr_level,politeness_pref,updated_at')
+      .select('id,display_name,grammatical_gender,cefr_level,politeness_pref,service_language,updated_at')
       .single();
 
     if (error || !data) {
