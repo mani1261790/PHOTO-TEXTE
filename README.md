@@ -57,6 +57,7 @@ openssl rand -base64 32
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+CRON_SECRET=
 APP_MASTER_KEY_B64=
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
@@ -90,6 +91,7 @@ npm run dev
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `CRON_SECRET`
 - `APP_MASTER_KEY_B64`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
@@ -119,7 +121,22 @@ Vercelの本番URLが出たら、Supabaseで設定:
 - 左: 進捗タイムライン / 右: 作業カード
 - ロック後編集不可を明示
 
-## 9. テスト
+## 9. Supabase自動pause回避（keepalive）
+
+このリポジトリには `vercel.json` のCron設定が含まれており、毎日 `03:00 UTC` に  
+`/api/internal/supabase-keepalive` を呼び出します。
+
+このAPIは `CRON_SECRET` を使って保護されています。  
+Vercel Cron は `Authorization: Bearer <CRON_SECRET>` を自動で付けるため、外部からは実行できません。
+
+初回セットアップ:
+
+1. `Project Settings -> Environment Variables` に `CRON_SECRET` を登録
+2. `Deployments` で再デプロイ
+3. 必要なら手動確認:
+   `curl -H "Authorization: Bearer $CRON_SECRET" https://<your-domain>/api/internal/supabase-keepalive`
+
+## 10. テスト
 
 ```bash
 npm test

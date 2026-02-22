@@ -1,266 +1,468 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { apiFetch } from '@/lib/api/fetcher';
-import { getAccessToken } from '@/lib/auth/token-store';
-import { DiffToken } from '@/lib/diff/read-only';
-import { useLanguage } from '@/components/LanguageProvider';
+import { apiFetch } from "@/lib/api/fetcher";
+import { getAccessToken } from "@/lib/auth/token-store";
+import { useLanguage } from "@/components/LanguageProvider";
 
-import { UnknownWords } from '@/components/UnknownWords';
+type EntryStatus =
+  | "DRAFT_FR"
+  | "JP_AUTO_READY"
+  | "JP_INTENT_LOCKED"
+  | "FINAL_FR_READY"
+  | "EXPORTED";
 
 type Entry = {
   id: string;
   title_fr: string;
+  // Legacy single-photo fields may exist; multi-photo uses entry_photos.
   draft_fr: string;
   jp_auto: string | null;
   jp_intent: string | null;
   final_fr: string | null;
-  status: 'DRAFT_FR' | 'JP_AUTO_READY' | 'JP_INTENT_LOCKED' | 'FINAL_FR_READY' | 'EXPORTED';
+  status: EntryStatus;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type EntryPhoto = {
+  id: string;
+  entry_id: string;
+  user_id: string;
+  position: number; // 1-based
+  photo_asset_id: string;
+  draft_fr: string;
+  jp_auto: string | null;
+  jp_intent: string | null;
+  final_fr: string | null;
+  status: EntryStatus;
+  created_at: string;
+  updated_at: string;
+  photo_preview_url: string | null;
 };
 
 type Memo = {
   id: string;
-  memo_type: 'TEACHER_FEEDBACK' | 'SELF_NOTE';
+  memo_type: "TEACHER_FEEDBACK" | "SELF_NOTE";
   content: string;
 };
 
-type HighlightToken = {
-  token: string;
-  unknown: boolean;
-  lemma?: string;
-  meaning?: string;
-};
-
-const statusIndex: Record<Entry['status'], number> = {
+const statusIndex: Record<EntryStatus, number> = {
   DRAFT_FR: 0,
   JP_AUTO_READY: 1,
   JP_INTENT_LOCKED: 2,
   FINAL_FR_READY: 3,
-  EXPORTED: 4
+  EXPORTED: 4,
 };
+
+function pickFirstIncompleteIndex(photos: EntryPhoto[]): number {
+  if (!photos.length) return 0;
+  const idx = photos.findIndex(
+    (p) => p.status !== "FINAL_FR_READY" && p.status !== "EXPORTED",
+  );
+  return idx >= 0 ? idx : 0;
+}
+
+function isDraftEditable(status: EntryStatus): boolean {
+  return status === "DRAFT_FR" || status === "JP_AUTO_READY";
+}
+
+function canTranslatePhoto(p: EntryPhoto, busy: boolean): boolean {
+  return !busy && isDraftEditable(p.status) && Boolean(p.draft_fr.trim());
+}
+
+function canLockIntentPhoto(
+  p: EntryPhoto,
+  busy: boolean,
+  jpIntentDraft: string,
+): boolean {
+  return !busy && p.status === "JP_AUTO_READY" && Boolean(jpIntentDraft.trim());
+}
+
+function isExportReadyForAllPhotos(photos: EntryPhoto[]): boolean {
+  if (!photos.length) return false;
+  return photos.every(
+    (p) =>
+      (p.status === "FINAL_FR_READY" || p.status === "EXPORTED") &&
+      Boolean(p.final_fr) &&
+      Boolean(p.jp_auto),
+  );
+}
+
+function normalizeMemoLinesToBullets(memos: Memo[]): string[] {
+  const lines: string[] = [];
+  for (const m of memos) {
+    if (m.memo_type !== "SELF_NOTE") continue;
+    const raw = (m.content ?? "").trim();
+    if (!raw) continue;
+    for (const part of raw.split(/\r?\n/)) {
+      const s = part.trim();
+      if (!s) continue;
+      lines.push(s.replace(/^[-*•\u2022]+\s*/, ""));
+    }
+  }
+  // Keep it reasonable (PPTX slide readability)
+  return lines.slice(0, 18);
+}
 
 export function EntryWizard({ id }: { id: string }) {
   const router = useRouter();
   const { language } = useLanguage();
-  const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
-  const steps = useMemo(
-    () => [
-      {
-        key: 'DRAFT_FR',
-        title: t('1. 下書きを入力', '1. Saisir le brouillon'),
-        detail: t('タイトルと本文を入力すると自動保存されます', 'Le titre et le texte sont enregistrés automatiquement.')
-      },
-      {
-        key: 'JP_AUTO_READY',
-        title: t('2. 日本語文を確認', '2. Vérifier le texte japonais'),
-        detail: t('フランス語の下書きから自動で日本語文を作成します', 'Le japonais est généré depuis le brouillon français.')
-      },
-      {
-        key: 'JP_INTENT_LOCKED',
-        title: t('3. 日本語文を確定', '3. Valider le texte japonais'),
-        detail: t('確定後に最終フランス語を生成します', 'La validation déclenche la génération du français final.')
-      },
-      {
-        key: 'FINAL_FR_READY',
-        title: t('4. 最終文を確認', '4. Vérifier le texte final'),
-        detail: t('最終文は自動生成され、編集できません', 'Le texte final est généré automatiquement et non modifiable.')
-      },
-      {
-        key: 'EXPORTED',
-        title: t('5. 提出資料を出力', '5. Exporter le dossier'),
-        detail: t('PPTXをダウンロードして提出します', 'Téléchargez le PPTX pour le rendre.')
-      }
-    ],
-    [language]
-  );
-  const statusLabel: Record<Entry['status'], string> = useMemo(
-    () => ({
-      DRAFT_FR: t('下書き入力中', 'Brouillon en cours'),
-      JP_AUTO_READY: t('日本語文を確認中', 'Vérif. du japonais'),
-      JP_INTENT_LOCKED: t('最終文を生成中', 'Final en cours'),
-      FINAL_FR_READY: t('最終文の確認完了', 'Final validé'),
-      EXPORTED: t('提出資料を出力済み', 'Export effectué')
-    }),
-    [language]
-  );
+  const t = (ja: string, fr: string) => (language === "fr" ? fr : ja);
+
   const [entry, setEntry] = useState<Entry | null>(null);
+  const [photos, setPhotos] = useState<EntryPhoto[]>([]);
+  const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
+
   const [memos, setMemos] = useState<Memo[]>([]);
-  const [jpIntentDraft, setJpIntentDraft] = useState('');
-  const [memoContent, setMemoContent] = useState('');
-  const [diffTokens, setDiffTokens] = useState<DiffToken[]>([]);
-  const [draftHighlights, setDraftHighlights] = useState<HighlightToken[]>([]);
-  const [finalHighlights, setFinalHighlights] = useState<HighlightToken[]>([]);
+  const [jpIntentDraftByPhotoId, setJpIntentDraftByPhotoId] = useState<
+    Record<string, string>
+  >({});
+
   const [exportUrl, setExportUrl] = useState<string | null>(null);
-  const [showDiff, setShowDiff] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
   const [draftSaving, setDraftSaving] = useState(false);
-  const lastSavedDraftRef = useRef<{ title_fr: string; draft_fr: string } | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoTranslateInFlightRef = useRef(false);
+  const autoTranslateInFlightRef = useRef<Record<string, boolean>>({});
+
   const draftCardRef = useRef<HTMLDivElement | null>(null);
   const jpAutoCardRef = useRef<HTMLDivElement | null>(null);
   const jpIntentCardRef = useRef<HTMLDivElement | null>(null);
   const finalCardRef = useRef<HTMLDivElement | null>(null);
   const exportCardRef = useRef<HTMLDivElement | null>(null);
-  const finalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const initializedVisibleStepRef = useRef(false);
-  const previousVisibleStepRef = useRef<string>('draft');
 
-  const draftEditable = useMemo(
-    () => entry?.status === 'DRAFT_FR' || entry?.status === 'JP_AUTO_READY',
-    [entry]
+  const initializedVisibleStepRef = useRef(false);
+  const previousVisibleStepRef = useRef<string>("draft");
+
+  const activePhoto = useMemo(() => {
+    if (!photos.length) return null;
+    if (!activePhotoId) return photos[0] ?? null;
+    return photos.find((p) => p.id === activePhotoId) ?? photos[0] ?? null;
+  }, [photos, activePhotoId]);
+
+  const activeJpIntentDraft = useMemo(() => {
+    if (!activePhoto) return "";
+    return jpIntentDraftByPhotoId[activePhoto.id] ?? activePhoto.jp_auto ?? "";
+  }, [activePhoto, jpIntentDraftByPhotoId]);
+
+  const exportReady = useMemo(
+    () => isExportReadyForAllPhotos(photos),
+    [photos],
   );
 
   const progress = useMemo(() => {
-    if (!entry) return 0;
-    return Math.round(((statusIndex[entry.status] + 1) / steps.length) * 100);
-  }, [entry, steps.length]);
+    if (!photos.length) return 0;
+    const done = photos.filter(
+      (p) => p.status === "FINAL_FR_READY" || p.status === "EXPORTED",
+    ).length;
+    return Math.round((done / photos.length) * 100);
+  }, [photos]);
 
-  const unknownWordCount = useMemo(
-    () =>
-      draftHighlights.filter((token) => token.unknown).length +
-      finalHighlights.filter((token) => token.unknown).length,
-    [draftHighlights, finalHighlights]
+  const statusLabel: Record<EntryStatus, string> = useMemo(
+    () => ({
+      DRAFT_FR: t("下書き入力中", "Brouillon en cours"),
+      JP_AUTO_READY: t("日本語文を確認中", "Vérif. du japonais"),
+      JP_INTENT_LOCKED: t("最終文を生成中", "Final en cours"),
+      FINAL_FR_READY: t("最終文の確認完了", "Final validé"),
+      EXPORTED: t("提出資料を出力済み", "Export effectué"),
+    }),
+    [language],
   );
 
-  async function loadEntry() {
-    const [entryData, memoData] = await Promise.all([
-      apiFetch<Entry>(`/api/entries/${id}`),
-      apiFetch<{ memos: Memo[] }>(`/api/entries/${id}/memos`)
-    ]);
-    setEntry(entryData);
-    setMemos(memoData.memos);
-    setJpIntentDraft(entryData.jp_auto ?? '');
-    lastSavedDraftRef.current = { title_fr: entryData.title_fr, draft_fr: entryData.draft_fr };
+  const steps = useMemo(
+    () => [
+      {
+        key: "DRAFT_FR",
+        title: t("1. 下書きを入力", "1. Saisir le brouillon"),
+        detail: t(
+          "写真を選択し、その写真について文章を書きます",
+          "Choisissez une photo et écrivez le texte.",
+        ),
+      },
+      {
+        key: "JP_AUTO_READY",
+        title: t("2. 日本語文を確認", "2. Vérifier le texte japonais"),
+        detail: t(
+          "フランス語から自動で日本語文を作成します",
+          "Le japonais est généré depuis le français.",
+        ),
+      },
+      {
+        key: "JP_INTENT_LOCKED",
+        title: t("3. 日本語文を確定", "3. Valider le texte japonais"),
+        detail: t(
+          "確定後に最終フランス語を生成します",
+          "La validation déclenche le français final.",
+        ),
+      },
+      {
+        key: "FINAL_FR_READY",
+        title: t("4. 最終文を確認", "4. Vérifier le texte final"),
+        detail: t(
+          "最終文は自動生成され、編集できません",
+          "Le texte final est généré automatiquement et non modifiable.",
+        ),
+      },
+      {
+        key: "EXPORTED",
+        title: t("5. 提出資料を出力", "5. Exporter le dossier"),
+        detail: t(
+          "PPTXをダウンロードして提出します",
+          "Téléchargez le PPTX pour le rendre.",
+        ),
+      },
+    ],
+    [language],
+  );
 
-    if (entryData.final_fr) {
-      const diff = await apiFetch<{
-        diff: { tokens: DiffToken[] };
-        draft_highlights: HighlightToken[];
-        final_highlights: HighlightToken[];
-      }>(`/api/entries/${id}/diff`);
-      setDiffTokens(diff.diff.tokens);
-      setDraftHighlights(diff.draft_highlights);
-      setFinalHighlights(diff.final_highlights);
-    } else {
-      setDiffTokens([]);
-      setDraftHighlights([]);
-      setFinalHighlights([]);
-      setShowDiff(false);
-    }
+  async function loadAll() {
+    const [entryData, photosData, memoData] = await Promise.all([
+      apiFetch<Entry>(`/api/entries/${id}`),
+      apiFetch<{ entry_id: string; photos: EntryPhoto[] }>(
+        `/api/entries/${id}/photos`,
+      ),
+      apiFetch<{ memos: Memo[] }>(`/api/entries/${id}/memos`),
+    ]);
+
+    setEntry(entryData);
+
+    const list = (photosData.photos ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position);
+    setPhotos(list);
+
+    setMemos(memoData.memos);
+
+    // Initialize active photo if not set.
+    setActivePhotoId((current) => {
+      if (current && list.some((p) => p.id === current)) return current;
+      const idx = pickFirstIncompleteIndex(list);
+      return list[idx]?.id ?? list[0]?.id ?? null;
+    });
+
+    // Initialize jpIntent drafts per photo, if missing.
+    setJpIntentDraftByPhotoId((prev) => {
+      const next = { ...prev };
+      for (const p of list) {
+        if (next[p.id] === undefined) {
+          next[p.id] = p.jp_auto ?? "";
+        }
+      }
+      return next;
+    });
   }
 
   useEffect(() => {
     if (!getAccessToken()) {
-      router.replace('/login');
+      router.replace("/login");
       return;
     }
-
-    loadEntry().catch((err) => setError(err.message));
+    loadAll().catch((err) => setError((err as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, router]);
 
+  // Auto-save draft_fr per photo (debounced) while editable.
   useEffect(() => {
-    if (!entry || !draftEditable) return;
-    if (!entry.title_fr.trim() || !entry.draft_fr.trim()) return;
-    if (
-      lastSavedDraftRef.current &&
-      lastSavedDraftRef.current.title_fr === entry.title_fr &&
-      lastSavedDraftRef.current.draft_fr === entry.draft_fr
-    ) {
+    if (!activePhoto) return;
+    if (!isDraftEditable(activePhoto.status)) return;
+
+    if (!activePhoto.draft_fr.trim()) return;
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      void updateActivePhotoDraft({ autoTranslate: true, silent: true });
+    }, 800);
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePhoto?.id, activePhoto?.draft_fr, activePhoto?.status]);
+
+  const currentIndex = useMemo(() => {
+    if (!activePhoto) return 0;
+    return statusIndex[activePhoto.status];
+  }, [activePhoto]);
+
+  const draftDone = currentIndex >= statusIndex.JP_AUTO_READY;
+  const jpAutoDone = currentIndex >= statusIndex.JP_INTENT_LOCKED;
+  const jpIntentDone = currentIndex >= statusIndex.FINAL_FR_READY;
+  const finalDone = Boolean(activePhoto?.final_fr);
+  const exportDone = Boolean(exportUrl);
+
+  const showJpAutoCard = Boolean(
+    activePhoto && currentIndex >= statusIndex.JP_AUTO_READY,
+  );
+  const showJpIntentCard = Boolean(
+    activePhoto && currentIndex >= statusIndex.JP_AUTO_READY,
+  );
+  const showFinalCard = Boolean(
+    activePhoto &&
+    (currentIndex >= statusIndex.JP_INTENT_LOCKED ||
+      Boolean(activePhoto.final_fr)),
+  );
+  const showExportCard = exportReady;
+
+  const canTranslate = useMemo(() => {
+    if (!activePhoto) return false;
+    return canTranslatePhoto(activePhoto, busy) && !draftSaving;
+  }, [activePhoto, busy, draftSaving]);
+
+  const visibleStepKey = showExportCard
+    ? "export"
+    : showFinalCard
+      ? "final"
+      : activePhoto?.status === "JP_AUTO_READY"
+        ? "jpAuto"
+        : showJpIntentCard
+          ? "jpIntent"
+          : showJpAutoCard
+            ? "jpAuto"
+            : "draft";
+
+  useEffect(() => {
+    if (!activePhoto) return;
+
+    if (!initializedVisibleStepRef.current) {
+      initializedVisibleStepRef.current = true;
+      previousVisibleStepRef.current = visibleStepKey;
       return;
     }
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-    autoSaveTimerRef.current = setTimeout(() => {
-      void updateDraftFields({ autoTranslate: true, silent: true });
-    }, 800);
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, [entry, draftEditable]);
+    if (previousVisibleStepRef.current === visibleStepKey) return;
+    previousVisibleStepRef.current = visibleStepKey;
 
-  useEffect(() => {
-    if (showDiff) return;
-    if (!entry?.final_fr) return;
-    const el = finalTextareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [entry?.final_fr, showDiff]);
+    const target =
+      visibleStepKey === "export"
+        ? exportCardRef.current
+        : visibleStepKey === "final"
+          ? finalCardRef.current
+          : visibleStepKey === "jpIntent"
+            ? jpIntentCardRef.current
+            : visibleStepKey === "jpAuto"
+              ? jpAutoCardRef.current
+              : draftCardRef.current;
 
-  async function updateDraftFields(options?: { autoTranslate?: boolean; silent?: boolean }) {
-    if (!entry || !draftEditable) return;
-    const silent = options?.silent ?? false;
-    if (!silent) {
-      setBusy(true);
-    } else {
-      setDraftSaving(true);
-    }
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activePhoto?.id, visibleStepKey]);
+
+  async function updateEntryTitle(nextTitle: string) {
+    if (!entry) return;
+    setEntry({ ...entry, title_fr: nextTitle });
+    setBusy(true);
     setError(null);
     try {
       const updated = await apiFetch<Entry>(`/api/entries/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ title_fr: entry.title_fr, draft_fr: entry.draft_fr })
+        method: "PUT",
+        body: JSON.stringify({ title_fr: nextTitle }),
       });
       setEntry(updated);
-      lastSavedDraftRef.current = { title_fr: updated.title_fr, draft_fr: updated.draft_fr };
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateActivePhotoDraft(options?: {
+    autoTranslate?: boolean;
+    silent?: boolean;
+  }) {
+    if (!activePhoto) return;
+    if (!isDraftEditable(activePhoto.status)) return;
+
+    const silent = options?.silent ?? false;
+    if (!silent) setBusy(true);
+    else setDraftSaving(true);
+
+    setError(null);
+
+    try {
+      const updated = await apiFetch<EntryPhoto>(
+        `/api/entries/${id}/photos/${activePhoto.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ draft_fr: activePhoto.draft_fr }),
+        },
+      );
+
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)),
+      );
+
       if (
         options?.autoTranslate &&
-        (updated.status === 'DRAFT_FR' || updated.status === 'JP_AUTO_READY')
+        (updated.status === "DRAFT_FR" || updated.status === "JP_AUTO_READY")
       ) {
-        await translate({ auto: true });
+        await translatePhoto(updated.id, { auto: true });
       }
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      if (!silent) {
-        setBusy(false);
-      } else {
-        setDraftSaving(false);
-      }
+      if (!silent) setBusy(false);
+      else setDraftSaving(false);
     }
   }
 
-  async function translate(options?: { auto?: boolean }) {
-    if (options?.auto && autoTranslateInFlightRef.current) return;
+  async function translatePhoto(photoId: string, options?: { auto?: boolean }) {
     if (options?.auto) {
-      autoTranslateInFlightRef.current = true;
+      if (autoTranslateInFlightRef.current[photoId]) return;
+      autoTranslateInFlightRef.current[photoId] = true;
     }
+
     setBusy(true);
     setError(null);
+
     try {
-      const updated = await apiFetch<Entry>(`/api/entries/${id}/translate`, {
-        method: 'POST',
-        body: '{}'
-      });
-      setEntry(updated);
-      setJpIntentDraft(updated.jp_auto ?? '');
+      const updated = await apiFetch<EntryPhoto>(
+        `/api/entries/${id}/photos/${photoId}/translate`,
+        {
+          method: "POST",
+          body: "{}",
+        },
+      );
+
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)),
+      );
+
+      setJpIntentDraftByPhotoId((prev) => ({
+        ...prev,
+        [updated.id]: prev[updated.id] ?? updated.jp_auto ?? "",
+      }));
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
-      autoTranslateInFlightRef.current = false;
+      if (options?.auto) autoTranslateInFlightRef.current[photoId] = false;
     }
   }
 
-  async function lockIntent() {
+  async function lockIntentPhoto(photoId: string) {
+    const jpIntent = jpIntentDraftByPhotoId[photoId] ?? "";
     setBusy(true);
     setError(null);
+
     try {
-      const updated = await apiFetch<Entry>(`/api/entries/${id}/lock_intent`, {
-        method: 'POST',
-        body: JSON.stringify({ jp_intent: jpIntentDraft })
-      });
-      setEntry(updated);
-      await loadEntry();
+      const updated = await apiFetch<EntryPhoto>(
+        `/api/entries/${id}/photos/${photoId}/lock_intent`,
+        {
+          method: "POST",
+          body: JSON.stringify({ jp_intent: jpIntent }),
+        },
+      );
+
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)),
+      );
+
+      // Refresh memos/entry photos status (diff/unknown words are not implemented for multi-photo yet)
+      await loadAll();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -268,17 +470,16 @@ export function EntryWizard({ id }: { id: string }) {
     }
   }
 
-  async function createMemo() {
-    if (!memoContent.trim()) return;
+  async function createMemo(content: string) {
+    if (!content.trim()) return;
     setBusy(true);
     setError(null);
     try {
       await apiFetch(`/api/entries/${id}/memos`, {
-        method: 'POST',
-        body: JSON.stringify({ memo_type: 'SELF_NOTE', content: memoContent })
+        method: "POST",
+        body: JSON.stringify({ memo_type: "SELF_NOTE", content }),
       });
-      setMemoContent('');
-      await loadEntry();
+      await loadAll();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -290,12 +491,15 @@ export function EntryWizard({ id }: { id: string }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await apiFetch<{ token: string }>(`/api/entries/${id}/export/pptx`, {
-        method: 'POST',
-        body: JSON.stringify({ include_memos: false })
-      });
+      const result = await apiFetch<{ token: string }>(
+        `/api/entries/${id}/export/pptx`,
+        {
+          method: "POST",
+          body: JSON.stringify({ include_memos: true }),
+        },
+      );
       setExportUrl(`/api/exports/${result.token}/download`);
-      await loadEntry();
+      await loadAll();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -303,281 +507,441 @@ export function EntryWizard({ id }: { id: string }) {
     }
   }
 
-  const currentIndex = entry ? statusIndex[entry.status] : 0;
-  const draftDone = currentIndex >= statusIndex.JP_AUTO_READY;
-  const jpAutoDone = currentIndex >= statusIndex.JP_INTENT_LOCKED;
-  const jpIntentDone = currentIndex >= statusIndex.FINAL_FR_READY;
-  const finalDone = Boolean(entry?.final_fr);
-  const exportDone = entry?.status === 'EXPORTED';
-  const showJpAutoCard = currentIndex >= statusIndex.JP_AUTO_READY;
-  const showJpIntentCard = currentIndex >= statusIndex.JP_AUTO_READY;
-  const showFinalCard = currentIndex >= statusIndex.JP_INTENT_LOCKED || Boolean(entry?.final_fr);
-  const showExportCard = currentIndex >= statusIndex.FINAL_FR_READY;
-  const canTranslate =
-    draftEditable && Boolean(entry?.title_fr.trim() && entry?.draft_fr.trim()) && !busy && !draftSaving;
-
-  const visibleStepKey = showExportCard
-    ? 'export'
-    : showFinalCard
-      ? 'final'
-      : currentIndex === statusIndex.JP_AUTO_READY
-        ? 'jpAuto'
-        : showJpIntentCard
-          ? 'jpIntent'
-          : showJpAutoCard
-            ? 'jpAuto'
-            : 'draft';
-
-  useEffect(() => {
-    if (!entry) {
-      return;
-    }
-    if (!initializedVisibleStepRef.current) {
-      initializedVisibleStepRef.current = true;
-      previousVisibleStepRef.current = visibleStepKey;
-      return;
-    }
-    if (previousVisibleStepRef.current === visibleStepKey) {
-      return;
-    }
-    previousVisibleStepRef.current = visibleStepKey;
-
-    const target =
-      visibleStepKey === 'export'
-        ? exportCardRef.current
-        : visibleStepKey === 'final'
-          ? finalCardRef.current
-          : visibleStepKey === 'jpIntent'
-            ? jpIntentCardRef.current
-            : visibleStepKey === 'jpAuto'
-              ? jpAutoCardRef.current
-              : draftCardRef.current;
-
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [entry, visibleStepKey]);
+  const [memoDraft, setMemoDraft] = useState("");
 
   if (!entry) {
-    return <div className="card">{t('エントリーを読み込み中...', 'Chargement de l’entrée...')}</div>;
+    return (
+      <div className="card">
+        {t("エントリーを読み込み中...", "Chargement de l’entrée...")}
+      </div>
+    );
   }
 
   return (
     <div className="wizard-shell">
       <aside className="card timeline desktop-only">
-        <h3>{t('進捗', 'Progression')}</h3>
-        <p className="badge">{t(`${progress}% 完了`, `${progress}% terminé`)}</p>
-        {steps.map((step, index) => {
-          const className =
-            index < currentIndex
-              ? 'timeline-step done'
-              : index === currentIndex
-                ? 'timeline-step active'
-                : 'timeline-step';
-          return (
-            <div key={step.key} className={className}>
+        <h3>{t("進捗", "Progression")}</h3>
+        <p className="badge">
+          {t(`${progress}% 完了`, `${progress}% terminé`)}
+        </p>
+        <div className="timeline-detail">
+          {t(
+            "写真ごとに進捗が進みます。",
+            "La progression avance photo par photo.",
+          )}
+        </div>
+
+        <div style={{ marginTop: 10 }}>
+          <strong>{t("写真", "Photos")}</strong>
+          <div
+            style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}
+          >
+            {photos.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={
+                  activePhoto?.id === p.id ? "pill pill-active" : "pill"
+                }
+                onClick={() => setActivePhotoId(p.id)}
+                style={{ width: "auto", margin: 0 }}
+              >
+                {t("写真", "Photo")} {p.position} · {statusLabel[p.status]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          {steps.map((step) => (
+            <div key={step.key} className="timeline-step">
               <strong>{step.title}</strong>
               <div className="timeline-detail">{step.detail}</div>
             </div>
-          );
-        })}
+          ))}
+        </div>
+
         <p>
-          <Link href="/">{t('一覧に戻る', 'Retour à la liste')}</Link>
+          <Link href="/">{t("一覧に戻る", "Retour à la liste")}</Link>
         </p>
       </aside>
 
       <section>
         <div className="mobile-progress">
           <div className="mobile-progress-row">
-            <strong>{t(`進捗 ${progress}%`, `Progression ${progress}%`)}</strong>
-            <span className="badge">{statusLabel[entry.status]}</span>
+            <strong>
+              {t(`進捗 ${progress}%`, `Progression ${progress}%`)}
+            </strong>
+            <span className="badge">
+              {activePhoto
+                ? `${t("写真", "Photo")} ${activePhoto.position} · ${statusLabel[activePhoto.status]}`
+                : statusLabel[entry.status]}
+            </span>
           </div>
           <div className="progress-track" aria-hidden>
             <div className="progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+          <div
+            style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}
+          >
+            {photos.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={
+                  activePhoto?.id === p.id ? "pill pill-active" : "pill"
+                }
+                onClick={() => setActivePhotoId(p.id)}
+                style={{ width: "auto", margin: 0 }}
+              >
+                {t("写真", "Photo")} {p.position}
+              </button>
+            ))}
           </div>
         </div>
 
         <div className="card hero desktop-only">
           <div className="hero-title-row">
-            <h1>{entry.title_fr || 'PHOTO-TEXTE'}</h1>
-            <span className="badge">{statusLabel[entry.status]}</span>
+            <h1>{entry.title_fr || "PHOTO-TEXTE"}</h1>
+            <span className="badge">
+              {t(`写真 ${photos.length}枚`, `${photos.length} photos`)}
+            </span>
           </div>
           <div className="metric-grid">
             <div className="metric">
-              <span>{t('進捗', 'Progression')}</span>
+              <span>{t("進捗(全体)", "Progression (global)")}</span>
               <strong>{progress}%</strong>
             </div>
             <div className="metric">
-              <span>{t('未知語', 'Mots inconnus')}</span>
-              <strong>{unknownWordCount}</strong>
+              <span>{t("メモ(SELF_NOTE)", "Notes (SELF_NOTE)")}</span>
+              <strong>
+                {memos.filter((m) => m.memo_type === "SELF_NOTE").length}
+              </strong>
             </div>
             <div className="metric">
-              <span>{t('メモ', 'Notes')}</span>
-              <strong>{memos.length}</strong>
+              <span>{t("エクスポート", "Export")}</span>
+              <strong>{exportReady ? t("可能", "OK") : t("未", "Non")}</strong>
             </div>
           </div>
         </div>
 
-        <div ref={draftCardRef} className={`card step-card${draftDone ? ' step-done' : ''}`}>
+        <div className="card step-card">
           <div className="step-head">
-            <h3>{t('下書き入力', 'Brouillon')}</h3>
-            {draftDone ? <span className="step-check">✓</span> : null}
+            <h3>{t("タイトル", "Titre")}</h3>
           </div>
           <label>
-            {t('タイトル（フランス語）', 'Titre (français)')}
+            {t("タイトル（フランス語）", "Titre (français)")}
             <input
               value={entry.title_fr}
               onChange={(e) => setEntry({ ...entry, title_fr: e.target.value })}
-              disabled={!draftEditable || busy}
+              onBlur={() => void updateEntryTitle(entry.title_fr)}
+              disabled={busy}
+              maxLength={200}
             />
           </label>
-          <label>
-            {t('下書き本文（フランス語）', 'Texte du brouillon (français)')}
-            <textarea
-              rows={6}
-              value={entry.draft_fr}
-              onChange={(e) => setEntry({ ...entry, draft_fr: e.target.value })}
-              disabled={!draftEditable || busy}
-            />
-          </label>
-          {draftSaving ? <p className="badge">{t('自動保存しています…', 'Enregistrement auto…')}</p> : null}
-          {entry.status !== 'DRAFT_FR' && entry.status !== 'JP_AUTO_READY' ? (
-            <p className="badge">{t('日本語文の確定後は編集できません', 'Impossible après validation du japonais.')}</p>
-          ) : null}
-          {draftEditable ? (
-            <button
-              type="button"
-              onClick={() => updateDraftFields({ autoTranslate: true })}
-              disabled={!canTranslate}
+          <p className="timeline-detail">
+            {t(
+              "タイトルはエントリー全体で共通です。",
+              "Le titre est commun à toute l’entrée.",
+            )}
+          </p>
+        </div>
+
+        {activePhoto ? (
+          <div className="card" style={{ padding: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+                flexWrap: "wrap",
+              }}
             >
-              {t('日本語文を生成', 'Générer le texte japonais')}
-            </button>
+              <div style={{ width: 320 }}>
+                {activePhoto.photo_preview_url ? (
+                  <img
+                    src={activePhoto.photo_preview_url}
+                    alt={`photo-${activePhoto.position}`}
+                    style={{
+                      width: "100%",
+                      height: "auto",
+                      borderRadius: 8,
+                      border: "1px solid #e2e8f0",
+                    }}
+                  />
+                ) : (
+                  <div className="badge">
+                    {t(
+                      "プレビューを取得できません",
+                      "Prévisualisation indisponible",
+                    )}
+                  </div>
+                )}
+                <p className="badge" style={{ marginTop: 10 }}>
+                  {t("選択中:", "Sélection :")} {t("写真", "Photo")}{" "}
+                  {activePhoto.position} · {statusLabel[activePhoto.status]}
+                </p>
+              </div>
+
+              <div style={{ flex: 1, minWidth: 280 }}>
+                <div
+                  ref={draftCardRef}
+                  className={`card step-card${draftDone ? " step-done" : ""}`}
+                  style={{ marginBottom: 12 }}
+                >
+                  <div className="step-head">
+                    <h3>
+                      {t(
+                        `下書き（写真 ${activePhoto.position}）`,
+                        `Brouillon (photo ${activePhoto.position})`,
+                      )}
+                    </h3>
+                    {draftDone ? <span className="step-check">✓</span> : null}
+                  </div>
+
+                  <label>
+                    {t(
+                      "下書き本文（フランス語）",
+                      "Texte du brouillon (français)",
+                    )}
+                    <textarea
+                      rows={8}
+                      value={activePhoto.draft_fr}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setPhotos((prev) =>
+                          prev.map((p) =>
+                            p.id === activePhoto.id
+                              ? { ...p, draft_fr: value }
+                              : p,
+                          ),
+                        );
+                      }}
+                      disabled={!isDraftEditable(activePhoto.status) || busy}
+                      maxLength={8000}
+                    />
+                  </label>
+
+                  {draftSaving ? (
+                    <p className="badge">
+                      {t("自動保存しています…", "Enregistrement auto…")}
+                    </p>
+                  ) : null}
+
+                  {!isDraftEditable(activePhoto.status) ? (
+                    <p className="badge">
+                      {t(
+                        "日本語文の確定後は編集できません",
+                        "Impossible après validation du japonais.",
+                      )}
+                    </p>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void updateActivePhotoDraft({ autoTranslate: true })
+                    }
+                    disabled={!canTranslate}
+                  >
+                    {t("日本語文を生成", "Générer le texte japonais")}
+                  </button>
+                </div>
+
+                {showJpAutoCard ? (
+                  <div
+                    ref={jpAutoCardRef}
+                    className={`card step-card${jpAutoDone ? " step-done" : ""}`}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <div className="step-head">
+                      <h3>{t("日本語文（自動）", "Texte japonais (auto)")}</h3>
+                      {jpAutoDone ? (
+                        <span className="step-check">✓</span>
+                      ) : null}
+                    </div>
+                    <textarea
+                      rows={6}
+                      value={activePhoto.jp_auto ?? ""}
+                      readOnly
+                    />
+                  </div>
+                ) : null}
+
+                {showJpIntentCard ? (
+                  <div
+                    ref={jpIntentCardRef}
+                    className={`card step-card${jpIntentDone ? " step-done" : ""}`}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <div className="step-head">
+                      <h3>
+                        {t("日本語文を確定", "Valider le texte japonais")}
+                      </h3>
+                      {jpIntentDone ? (
+                        <span className="step-check">✓</span>
+                      ) : null}
+                    </div>
+
+                    {activePhoto.status === "JP_AUTO_READY" ? (
+                      <>
+                        <textarea
+                          rows={6}
+                          value={activeJpIntentDraft}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setJpIntentDraftByPhotoId((prev) => ({
+                              ...prev,
+                              [activePhoto.id]: value,
+                            }));
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void lockIntentPhoto(activePhoto.id)}
+                          disabled={
+                            !canLockIntentPhoto(
+                              activePhoto,
+                              busy,
+                              activeJpIntentDraft,
+                            )
+                          }
+                        >
+                          {t("日本語文を確定", "Valider le texte japonais")}
+                        </button>
+                      </>
+                    ) : (
+                      <textarea
+                        rows={6}
+                        value={activePhoto.jp_intent ?? activeJpIntentDraft}
+                        readOnly
+                      />
+                    )}
+                  </div>
+                ) : null}
+
+                {showFinalCard ? (
+                  <div
+                    ref={finalCardRef}
+                    className={`card step-card${finalDone ? " step-done" : ""}`}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <div className="step-head">
+                      <h3>{t("最終フランス語", "Français final")}</h3>
+                      {finalDone ? <span className="step-check">✓</span> : null}
+                    </div>
+                    {activePhoto.status === "JP_INTENT_LOCKED" &&
+                    !activePhoto.final_fr ? (
+                      <p className="badge">
+                        {t(
+                          "最終フランス語を自動生成しています…",
+                          "Génération du français final…",
+                        )}
+                      </p>
+                    ) : null}
+                    <textarea
+                      rows={6}
+                      value={activePhoto.final_fr ?? ""}
+                      readOnly
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="card">
+            {t(
+              "写真がありません。新規作成から写真を追加してください。",
+              "Aucune photo. Ajoutez des photos lors de la création.",
+            )}
+          </div>
+        )}
+
+        <div
+          ref={exportCardRef}
+          className={`card step-card${exportDone ? " step-done" : ""}`}
+        >
+          <div className="step-head">
+            <h3>{t("提出用PPTXを出力", "Exporter le PPTX")}</h3>
+            {exportDone ? <span className="step-check">✓</span> : null}
+          </div>
+
+          {exportReady ? (
+            <p className="badge">
+              {t(
+                "全ての写真が完了しました。エクスポートできます。",
+                "Toutes les photos sont prêtes. Vous pouvez exporter.",
+              )}
+            </p>
+          ) : (
+            <p className="badge">
+              {t(
+                "未完了の写真があります。すべての写真で最終文まで完了してください。",
+                "Certaines photos ne sont pas prêtes. Terminez toutes les photos.",
+              )}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={exportPptx}
+            disabled={busy || !exportReady}
+          >
+            {t("エクスポートを生成", "Générer l'export")}
+          </button>
+
+          {exportUrl ? (
+            <p>
+              <a href={exportUrl}>
+                {t("最新PPTXをダウンロード", "Télécharger le PPTX")}
+              </a>
+            </p>
           ) : null}
         </div>
 
-        {showJpAutoCard ? (
-          <div ref={jpAutoCardRef} className={`card step-card${jpAutoDone ? ' step-done' : ''}`}>
-            <div className="step-head">
-              <h3>{t('日本語文', 'Texte japonais')}</h3>
-              {jpAutoDone ? <span className="step-check">✓</span> : null}
-            </div>
-            <textarea rows={6} value={entry.jp_auto ?? ''} readOnly />
-          </div>
-        ) : null}
-
-        {showJpIntentCard ? (
-          <div ref={jpIntentCardRef} className={`card step-card${jpIntentDone ? ' step-done' : ''}`}>
-            <div className="step-head">
-              <h3>{t('日本語文を確定', 'Valider le texte japonais')}</h3>
-              {jpIntentDone ? <span className="step-check">✓</span> : null}
-            </div>
-            {entry.status === 'JP_AUTO_READY' ? (
-              <>
-                <textarea
-                  rows={6}
-                  value={jpIntentDraft}
-                  onChange={(e) => setJpIntentDraft(e.target.value)}
-                />
-                <button type="button" onClick={lockIntent} disabled={busy || !jpIntentDraft.trim()}>
-                  {t('日本語文を確定', 'Valider le texte japonais')}
-                </button>
-              </>
-            ) : (
-              <textarea rows={6} value={entry.jp_intent ?? jpIntentDraft} readOnly />
-            )}
-          </div>
-        ) : null}
-
-        {showFinalCard ? (
-          <div ref={finalCardRef} className={`card step-card${finalDone ? ' step-done' : ''}`}>
-            <div className="step-head">
-              <h3>{t('最終フランス語', 'Français final')}</h3>
-              {finalDone ? <span className="step-check">✓</span> : null}
-            </div>
-            {entry.status === 'JP_INTENT_LOCKED' && !entry.final_fr ? (
-              <p className="badge">{t('最終フランス語を自動生成しています…', 'Génération du français final…')}</p>
-            ) : null}
-            {showDiff && diffTokens.length ? (
-              <pre className="diff-block diff-inline">
-                {diffTokens.map((token, idx) => {
-                  if (token.kind === 'add') {
-                    return (
-                      <span key={idx} className="diff-add">
-                        +{token.value}
-                      </span>
-                    );
-                  }
-                  if (token.kind === 'remove') {
-                    return (
-                      <span key={idx} className="diff-remove">
-                        -{token.value}
-                      </span>
-                    );
-                  }
-                  return <span key={idx}>{token.value}</span>;
-                })}
-              </pre>
-            ) : (
-              <textarea
-                ref={finalTextareaRef}
-                className="auto-grow"
-                rows={1}
-                value={entry.final_fr ?? ''}
-                readOnly
-              />
-            )}
-            {entry.final_fr ? (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowDiff((current) => !current)}
-              >
-                {showDiff ? t('差分を隠す', 'Masquer le diff') : t('差分を表示', 'Afficher le diff')}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-
-        {showFinalCard && entry.final_fr ? (
-          <UnknownWords label={t('下書きのフランス語', 'Français du brouillon')} tokens={draftHighlights} />
-        ) : null}
-        {showFinalCard && entry.final_fr ? (
-          <UnknownWords label={t('最終文のフランス語', 'Français final')} tokens={finalHighlights} />
-        ) : null}
-
-        {showExportCard ? (
-          <div ref={exportCardRef} className={`card step-card${exportDone ? ' step-done' : ''}`}>
-            <div className="step-head">
-              <h3>{t('提出用PPTXを出力', 'Exporter le PPTX')}</h3>
-              {exportDone ? <span className="step-check">✓</span> : null}
-            </div>
-            <button
-              type="button"
-              onClick={exportPptx}
-              disabled={busy || (entry.status !== 'FINAL_FR_READY' && entry.status !== 'EXPORTED')}
-            >
-              {t('エクスポートを生成', "Générer l'export")}
-            </button>
-            {exportUrl ? (
-              <p>
-                <a href={exportUrl}>{t('最新PPTXをダウンロード', 'Télécharger le PPTX')}</a>
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
         <div className="card">
-          <h3>{t('メモ', 'Notes')}</h3>
+          <h3>{t("学び（SELF_NOTE）", "Apprentissages (SELF_NOTE)")}</h3>
+          <p className="timeline-detail">
+            {t(
+              "ここに書いた内容は、PPTXの最後のスライドに箇条書きで出力されます。",
+              "Ce contenu apparaîtra en puces sur la dernière diapositive du PPTX.",
+            )}
+          </p>
+
           <textarea
             rows={4}
-            value={memoContent}
-            onChange={(e) => setMemoContent(e.target.value)}
-            placeholder={t('先生からの指摘や自分用メモを入力', 'Saisissez les remarques ou notes personnelles')}
+            value={memoDraft}
+            onChange={(e) => setMemoDraft(e.target.value)}
+            placeholder={t(
+              "新たな単語・文法・気づきなど（改行で複数OK）",
+              "Nouveaux mots/grammaire/observations (multi-lignes OK)",
+            )}
           />
-          <button type="button" onClick={createMemo} disabled={busy || !memoContent.trim()}>
-            {t('メモを追加', 'Ajouter une note')}
+          <button
+            type="button"
+            onClick={() => {
+              const value = memoDraft;
+              setMemoDraft("");
+              void createMemo(value);
+            }}
+            disabled={busy || !memoDraft.trim()}
+          >
+            {t("メモを追加", "Ajouter une note")}
           </button>
-          {memos.map((memo) => (
-            <p key={memo.id}>{memo.content}</p>
-          ))}
+
+          {memos.filter((m) => m.memo_type === "SELF_NOTE").length ? (
+            <>
+              <h4 style={{ marginBottom: 6 }}>{t("登録済み", "Enregistré")}</h4>
+              {normalizeMemoLinesToBullets(memos).map((line, idx) => (
+                <p key={`${idx}-${line}`}>• {line}</p>
+              ))}
+            </>
+          ) : (
+            <p className="timeline-detail">
+              {t("SELF_NOTEはまだありません。", "Aucune note pour l'instant.")}
+            </p>
+          )}
         </div>
 
         {error ? <p className="error">{error}</p> : null}
