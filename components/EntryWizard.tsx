@@ -938,48 +938,6 @@ export function EntryWizard({ id }: { id: string }) {
           </div>
         )}
 
-        <div
-          ref={exportCardRef}
-          className={`card step-card${exportDone ? " step-done" : ""}`}
-        >
-          <div className="step-head">
-            <h3>{t("提出用PPTXを出力", "Exporter le PPTX")}</h3>
-            {exportDone ? <span className="step-check">✓</span> : null}
-          </div>
-
-          {exportReady ? (
-            <p className="badge">
-              {t(
-                "全ての写真が完了しました。エクスポートできます。",
-                "Toutes les photos sont prêtes. Vous pouvez exporter.",
-              )}
-            </p>
-          ) : (
-            <p className="badge">
-              {t(
-                "未完了の写真があります。すべての写真で最終文まで完了してください。",
-                "Certaines photos ne sont pas prêtes. Terminez toutes les photos.",
-              )}
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={exportPptx}
-            disabled={busy || !exportReady}
-          >
-            {t("エクスポートを生成", "Générer l'export")}
-          </button>
-
-          {exportUrl ? (
-            <p>
-              <a href={exportUrl}>
-                {t("最新PPTXをダウンロード", "Télécharger le PPTX")}
-              </a>
-            </p>
-          ) : null}
-        </div>
-
         <div className="card">
           <h3>{t("学び（SELF_NOTE）", "Apprentissages (SELF_NOTE)")}</h3>
           <p className="timeline-detail">
@@ -1022,6 +980,48 @@ export function EntryWizard({ id }: { id: string }) {
               {t("SELF_NOTEはまだありません。", "Aucune note pour l'instant.")}
             </p>
           )}
+        </div>
+
+        <div
+          ref={exportCardRef}
+          className={`card step-card${exportDone ? " step-done" : ""}`}
+        >
+          <div className="step-head">
+            <h3>{t("提出用PPTXを出力", "Exporter le PPTX")}</h3>
+            {exportDone ? <span className="step-check">✓</span> : null}
+          </div>
+
+          {exportReady ? (
+            <p className="badge">
+              {t(
+                "全ての写真が完了しました。エクスポートできます。",
+                "Toutes les photos sont prêtes. Vous pouvez exporter.",
+              )}
+            </p>
+          ) : (
+            <p className="badge">
+              {t(
+                "未完了の写真があります。すべての写真で最終文まで完了してください。",
+                "Certaines photos ne sont pas prêtes. Terminez toutes les photos.",
+              )}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={exportPptx}
+            disabled={busy || !exportReady}
+          >
+            {t("エクスポートを生成", "Générer l'export")}
+          </button>
+
+          {exportUrl ? (
+            <p>
+              <a href={exportUrl}>
+                {t("最新PPTXをダウンロード", "Télécharger le PPTX")}
+              </a>
+            </p>
+          ) : null}
         </div>
 
         {error ? <p className="error">{error}</p> : null}
