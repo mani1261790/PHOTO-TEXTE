@@ -700,6 +700,14 @@ button[disabled] {
     background: #f3f4f6;
 }
 
+.entry-thumb-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--theme-subtle);
+    font-size: 12px;
+}
+
 .form-card label {
     display: block;
 }
@@ -765,6 +773,9 @@ button[disabled] {
     min-height: 34px;
     margin: 0;
     padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 999px;
     border: 1px solid #efc8c4;
     background: #fff;
@@ -777,6 +788,28 @@ button[disabled] {
     width: 16px;
     height: 16px;
     display: block;
+}
+
+.entry-photo-strip {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 4px 2px 6px;
+    scroll-snap-type: x proximity;
+}
+
+.entry-photo-card {
+    flex: 0 0 220px;
+    display: grid;
+    gap: 6px;
+    scroll-snap-align: start;
+}
+
+.entry-photo-text {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #1f2937;
 }
 
 @media (max-width: 960px) {

@@ -14,6 +14,12 @@ type EntryItem = {
   status: string;
   final_fr: string | null;
   photo_preview_url: string | null;
+  entry_photos: {
+    id: string;
+    position: number;
+    final_fr: string | null;
+    photo_preview_url: string | null;
+  }[];
   updated_at: string;
 };
 
@@ -57,8 +63,14 @@ export function EntriesDashboard() {
     const q = query.trim().toLowerCase();
     return orderedEntries.filter((entry) => {
       const statusOk = statusFilter === 'ALL' || entry.status === statusFilter;
+      const photoQueryOk = entry.entry_photos?.some((photo) =>
+        (photo.final_fr ?? '').toLowerCase().includes(q)
+      );
       const queryOk =
-        !q || entry.title_fr.toLowerCase().includes(q) || (entry.final_fr ?? '').toLowerCase().includes(q);
+        !q ||
+        entry.title_fr.toLowerCase().includes(q) ||
+        (entry.final_fr ?? '').toLowerCase().includes(q) ||
+        Boolean(photoQueryOk);
       return statusOk && queryOk;
     });
   }, [orderedEntries, query, statusFilter]);
@@ -162,18 +174,42 @@ export function EntriesDashboard() {
                 </summary>
 
                 <div className="accordion-body">
-                  {entry.photo_preview_url ? (
-                    <img
-                      src={entry.photo_preview_url}
-                      alt={entry.title_fr}
-                      className="entry-thumb"
-                      loading="lazy"
-                    />
-                  ) : null}
-
                   <div>
-                    <h4>{t('最終フランス語', 'Français final')}</h4>
-                    <p>{entry.final_fr ?? t('まだ最終文は生成されていません。', 'Le texte final n’est pas prêt.')}</p>
+                    <h4>{t('写真と文章', 'Photos & textes')}</h4>
+                    <div className="entry-photo-strip">
+                      {entry.entry_photos?.length ? (
+                        entry.entry_photos.map((photo) => (
+                          <div key={photo.id} className="entry-photo-card">
+                            {photo.photo_preview_url ? (
+                              <img
+                                src={photo.photo_preview_url}
+                                alt={`${entry.title_fr} ${photo.position}`}
+                                className="entry-thumb"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="entry-thumb entry-thumb-empty">
+                                {t('写真なし', 'Pas de photo')}
+                              </div>
+                            )}
+                            <span className="badge">
+                              {t('写真', 'Photo')} {photo.position}
+                            </span>
+                            <p className="entry-photo-text">
+                              {photo.final_fr ??
+                                t(
+                                  'まだ最終文は生成されていません。',
+                                  'Le texte final n’est pas prêt.'
+                                )}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="timeline-detail">
+                          {t('写真がありません。', 'Aucune photo.')}
+                        </p>
+                      )}
+                    </div>
                     <div className="entry-actions">
                       <Link href={`/entries/${entry.id}`} className="entry-open-btn">
                         {t('このエントリーを開く', 'Ouvrir cette entrée')}

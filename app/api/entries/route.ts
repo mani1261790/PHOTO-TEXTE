@@ -51,10 +51,19 @@ export async function GET(req: NextRequest) {
     const { data: entryPhotos, error: entryPhotosError } = entryIds.length
       ? await client
           .from('entry_photos')
-          .select('entry_id,position,photo_asset_id,final_fr')
+          .select('id,entry_id,position,photo_asset_id,final_fr')
           .in('entry_id', entryIds)
           .order('position', { ascending: true })
-      : { data: [] as { entry_id: string; position: number; photo_asset_id: string | null; final_fr: string | null }[], error: null };
+      : {
+          data: [] as {
+            id: string;
+            entry_id: string;
+            position: number;
+            photo_asset_id: string | null;
+            final_fr: string | null;
+          }[],
+          error: null
+        };
 
     if (entryPhotosError) {
       badRequest('ENTRY_PHOTOS_LIST_FAILED', 'Unable to fetch entry photos');
@@ -82,9 +91,13 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const assetIds = [
-      ...new Set(normalizedEntries.map((entry) => entry.photo_asset_id).filter(Boolean))
-    ] as string[];
+    const entryAssetIds = normalizedEntries
+      .map((entry) => entry.photo_asset_id)
+      .filter(Boolean) as string[];
+    const photoAssetIds = (entryPhotos ?? [])
+      .map((photo) => photo.photo_asset_id)
+      .filter(Boolean) as string[];
+    const assetIds = [...new Set([...entryAssetIds, ...photoAssetIds])];
     const { data: assets } = assetIds.length
       ? await client
           .from('assets')
@@ -93,25 +106,67 @@ export async function GET(req: NextRequest) {
       : { data: [] as { id: string; object_path: string }[] };
 
     const assetPathById = new Map((assets ?? []).map((asset) => [asset.id, asset.object_path]));
+    const signedUrlByAssetId = new Map<string, string | null>();
 
-    const entriesWithPreview = await Promise.all(
-      normalizedEntries.map(async (entry) => {
-        const objectPath = assetPathById.get(entry.photo_asset_id);
-        let photo_preview_url: string | null = null;
-
-        if (objectPath) {
-          const signed = await client.storage.from(process.env.PHOTO_BUCKET ?? 'photos').createSignedUrl(objectPath, 300);
-          if (!signed.error && signed.data?.signedUrl) {
-            photo_preview_url = signed.data.signedUrl;
-          }
+    await Promise.all(
+      (assets ?? []).map(async (asset) => {
+        const objectPath = assetPathById.get(asset.id);
+        if (!objectPath) {
+          signedUrlByAssetId.set(asset.id, null);
+          return;
         }
-
-        return {
-          ...entry,
-          photo_preview_url
-        };
+        const signed = await client.storage
+          .from(process.env.PHOTO_BUCKET ?? 'photos')
+          .createSignedUrl(objectPath, 300);
+        if (!signed.error && signed.data?.signedUrl) {
+          signedUrlByAssetId.set(asset.id, signed.data.signedUrl);
+          return;
+        }
+        signedUrlByAssetId.set(asset.id, null);
       })
     );
+
+    const entryPhotosByEntryId = new Map<
+      string,
+      { id: string; position: number; final_fr: string | null; photo_preview_url: string | null }[]
+    >();
+
+    for (const photo of entryPhotos ?? []) {
+      const list = entryPhotosByEntryId.get(photo.entry_id) ?? [];
+      list.push({
+        id: photo.id,
+        position: photo.position,
+        final_fr: photo.final_fr ?? null,
+        photo_preview_url: photo.photo_asset_id
+          ? signedUrlByAssetId.get(photo.photo_asset_id) ?? null
+          : null
+      });
+      entryPhotosByEntryId.set(photo.entry_id, list);
+    }
+
+    const entriesWithPreview = normalizedEntries.map((entry) => {
+      const photo_preview_url = entry.photo_asset_id
+        ? signedUrlByAssetId.get(entry.photo_asset_id) ?? null
+        : null;
+      const entry_photos =
+        entryPhotosByEntryId.get(entry.id) ??
+        (entry.photo_asset_id
+          ? [
+              {
+                id: entry.id,
+                position: 1,
+                final_fr: entry.final_fr ?? null,
+                photo_preview_url
+              }
+            ]
+          : []);
+
+      return {
+        ...entry,
+        photo_preview_url,
+        entry_photos
+      };
+    });
 
     return ok({ entries: entriesWithPreview });
   } catch (error) {
