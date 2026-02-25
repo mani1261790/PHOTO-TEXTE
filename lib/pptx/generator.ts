@@ -18,6 +18,7 @@ export interface PptxPhotoInput {
 
 export interface PptxExportInput {
   titleFr: string;
+  displayName?: string;
   photos: PptxPhotoInput[];
   /**
    * SELF_NOTE memo content lines.
@@ -196,7 +197,7 @@ function addPhotoOrPlaceholder(
   });
 }
 
-function addTitlePage(pptx: PptxGenJS, titleFr: string) {
+function addTitlePage(pptx: PptxGenJS, titleFr: string, displayName?: string) {
   const s = pptx.addSlide();
   s.background = { color: "F8FAFC" };
 
@@ -223,6 +224,20 @@ function addTitlePage(pptx: PptxGenJS, titleFr: string) {
     fontSize: 14,
     color: "64748B",
   });
+
+  const safeName = (displayName ?? "").trim();
+  if (safeName) {
+    s.addText(safeName, {
+      x: 0.6,
+      y: 6.85,
+      w: 6,
+      h: 0.35,
+      align: "left",
+      fontFace: "Aptos",
+      fontSize: 14,
+      color: "334155",
+    });
+  }
 }
 
 function computeGrid(n: number): { cols: number; rows: number } {
@@ -400,6 +415,7 @@ export async function generatePhotoTextePptx(
   pptx.layout = "LAYOUT_WIDE";
 
   const titleFr = (data.titleFr ?? "").trim() || "PHOTO-TEXTE";
+  const displayName = (data.displayName ?? "").trim();
 
   // Normalize photos and ensure deterministic order by position.
   const photos = [...(data.photos ?? [])]
@@ -415,7 +431,7 @@ export async function generatePhotoTextePptx(
     }));
 
   // Title
-  addTitlePage(pptx, titleFr);
+  addTitlePage(pptx, titleFr, displayName);
 
   // Grid summary slide
   addPhotosGridSlide(pptx, titleFr, photos);

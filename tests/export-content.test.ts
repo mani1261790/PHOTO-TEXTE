@@ -10,10 +10,16 @@ describe('pptx export privacy', () => {
 
     const buffer = await generatePhotoTextePptx({
       titleFr: 'Mon titre',
-      draftFr: 'Je visite un parc.',
-      jpAuto: '公園を訪れます。',
-      jpIntent: '私は落ち着いた雰囲気で公園を訪れました。',
-      finalFr: 'Je visite calmement un parc.'
+      displayName,
+      photos: [
+        {
+          position: 1,
+          draftFr: 'Je visite un parc.',
+          jpAuto: '公園を訪れます。',
+          jpIntent: '私は落ち着いた雰囲気で公園を訪れました。',
+          finalFr: 'Je visite calmement un parc.'
+        }
+      ]
     });
 
     const zip = await JSZip.loadAsync(buffer);
@@ -24,6 +30,6 @@ describe('pptx export privacy', () => {
     ).join('\n');
 
     expect(allXml).not.toContain(email);
-    expect(allXml).not.toContain(displayName);
+    expect(allXml).toContain(displayName);
   });
 });

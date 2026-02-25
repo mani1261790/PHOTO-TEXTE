@@ -46,7 +46,45 @@ export async function GET(req: NextRequest) {
     }
 
     const entries = data ?? [];
-    const assetIds = [...new Set(entries.map((entry) => entry.photo_asset_id))];
+    const entryIds = entries.map((entry) => entry.id);
+
+    const { data: entryPhotos, error: entryPhotosError } = entryIds.length
+      ? await client
+          .from('entry_photos')
+          .select('entry_id,position,photo_asset_id,final_fr')
+          .in('entry_id', entryIds)
+          .order('position', { ascending: true })
+      : { data: [] as { entry_id: string; position: number; photo_asset_id: string | null; final_fr: string | null }[], error: null };
+
+    if (entryPhotosError) {
+      badRequest('ENTRY_PHOTOS_LIST_FAILED', 'Unable to fetch entry photos');
+    }
+
+    const firstPhotoByEntryId = new Map<
+      string,
+      { photo_asset_id: string | null; final_fr: string | null }
+    >();
+
+    for (const photo of entryPhotos ?? []) {
+      if (firstPhotoByEntryId.has(photo.entry_id)) continue;
+      firstPhotoByEntryId.set(photo.entry_id, {
+        photo_asset_id: photo.photo_asset_id ?? null,
+        final_fr: photo.final_fr ?? null
+      });
+    }
+
+    const normalizedEntries = entries.map((entry) => {
+      const firstPhoto = firstPhotoByEntryId.get(entry.id);
+      return {
+        ...entry,
+        final_fr: entry.final_fr ?? firstPhoto?.final_fr ?? null,
+        photo_asset_id: entry.photo_asset_id ?? firstPhoto?.photo_asset_id ?? null
+      };
+    });
+
+    const assetIds = [
+      ...new Set(normalizedEntries.map((entry) => entry.photo_asset_id).filter(Boolean))
+    ] as string[];
     const { data: assets } = assetIds.length
       ? await client
           .from('assets')
@@ -57,7 +95,7 @@ export async function GET(req: NextRequest) {
     const assetPathById = new Map((assets ?? []).map((asset) => [asset.id, asset.object_path]));
 
     const entriesWithPreview = await Promise.all(
-      entries.map(async (entry) => {
+      normalizedEntries.map(async (entry) => {
         const objectPath = assetPathById.get(entry.photo_asset_id);
         let photo_preview_url: string | null = null;
 

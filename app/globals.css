@@ -537,6 +537,17 @@ button[disabled] {
     font-size: clamp(24px, 3.3vw, 34px);
 }
 
+.entry-photo-panel {
+    width: 100%;
+    max-width: 320px;
+    flex: 1 1 280px;
+}
+
+.entry-photo-content {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
 .metric-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -760,6 +771,12 @@ button[disabled] {
     color: #b42318;
     font-size: 16px;
     line-height: 1;
+}
+
+.icon-trash {
+    width: 16px;
+    height: 16px;
+    display: block;
 }
 
 @media (max-width: 960px) {

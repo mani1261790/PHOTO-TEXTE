@@ -7,6 +7,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api/fetcher";
 import { getAccessToken } from "@/lib/auth/token-store";
 import { useLanguage } from "@/components/LanguageProvider";
+import { DiffReadOnly } from "@/components/DiffReadOnly";
+import { DiffToken } from "@/lib/diff/read-only";
 
 type EntryStatus =
   | "DRAFT_FR"
@@ -48,6 +50,14 @@ type Memo = {
   id: string;
   memo_type: "TEACHER_FEEDBACK" | "SELF_NOTE";
   content: string;
+};
+
+type PhotoDiff = {
+  entry_id: string;
+  photo_id: string;
+  diff: {
+    tokens: DiffToken[];
+  };
 };
 
 const statusIndex: Record<EntryStatus, number> = {
@@ -128,6 +138,13 @@ export function EntryWizard({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
 
   const [draftSaving, setDraftSaving] = useState(false);
+  const [diffLoadingId, setDiffLoadingId] = useState<string | null>(null);
+  const [diffByPhotoId, setDiffByPhotoId] = useState<
+    Record<string, { draft: string; final: string; tokens: DiffToken[] }>
+  >({});
+  const [diffErrorByPhotoId, setDiffErrorByPhotoId] = useState<
+    Record<string, string>
+  >({});
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoTranslateInFlightRef = useRef<Record<string, boolean>>({});
 
@@ -350,6 +367,42 @@ export function EntryWizard({ id }: { id: string }) {
 
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [activePhoto?.id, visibleStepKey]);
+
+  useEffect(() => {
+    if (!activePhoto) return;
+    if (!activePhoto.final_fr) return;
+
+    const draft = activePhoto.draft_fr ?? "";
+    const final = activePhoto.final_fr ?? "";
+    const cached = diffByPhotoId[activePhoto.id];
+    if (cached && cached.draft === draft && cached.final === final) return;
+
+    setDiffLoadingId(activePhoto.id);
+    setDiffErrorByPhotoId((prev) => {
+      const next = { ...prev };
+      delete next[activePhoto.id];
+      return next;
+    });
+
+    apiFetch<PhotoDiff>(`/api/entries/${id}/photos/${activePhoto.id}/diff`)
+      .then((res) => {
+        setDiffByPhotoId((prev) => ({
+          ...prev,
+          [activePhoto.id]: { draft, final, tokens: res.diff.tokens },
+        }));
+      })
+      .catch((err) => {
+        setDiffErrorByPhotoId((prev) => ({
+          ...prev,
+          [activePhoto.id]: (err as Error).message,
+        }));
+      })
+      .finally(() => {
+        setDiffLoadingId((current) =>
+          current === activePhoto.id ? null : current,
+        );
+      });
+  }, [activePhoto?.id, activePhoto?.draft_fr, activePhoto?.final_fr, id]);
 
   async function updateEntryTitle(nextTitle: string) {
     if (!entry) return;
@@ -657,7 +710,7 @@ export function EntryWizard({ id }: { id: string }) {
                 flexWrap: "wrap",
               }}
             >
-              <div style={{ width: 320 }}>
+              <div className="entry-photo-panel">
                 {activePhoto.photo_preview_url ? (
                   <img
                     src={activePhoto.photo_preview_url}
@@ -683,7 +736,7 @@ export function EntryWizard({ id }: { id: string }) {
                 </p>
               </div>
 
-              <div style={{ flex: 1, minWidth: 280 }}>
+              <div className="entry-photo-content">
                 <div
                   ref={draftCardRef}
                   className={`card step-card${draftDone ? " step-done" : ""}`}
@@ -845,6 +898,33 @@ export function EntryWizard({ id }: { id: string }) {
                       readOnly
                     />
                   </div>
+                ) : null}
+
+                {activePhoto.final_fr ? (
+                  diffErrorByPhotoId[activePhoto.id] ? (
+                    <div className="card">
+                      <h3>{t("差分表示", "Comparer les versions")}</h3>
+                      <p className="badge">
+                        {t(
+                          "差分の取得に失敗しました。",
+                          "Échec du chargement du diff.",
+                        )}
+                      </p>
+                    </div>
+                  ) : diffByPhotoId[activePhoto.id]?.tokens ? (
+                    <DiffReadOnly
+                      tokens={diffByPhotoId[activePhoto.id].tokens}
+                    />
+                  ) : (
+                    <div className="card">
+                      <h3>{t("差分表示", "Comparer les versions")}</h3>
+                      <p className="badge">
+                        {diffLoadingId === activePhoto.id
+                          ? t("差分を読み込み中…", "Chargement du diff…")
+                          : t("差分を準備中…", "Préparation du diff…")}
+                      </p>
+                    </div>
+                  )
                 ) : null}
               </div>
             </div>

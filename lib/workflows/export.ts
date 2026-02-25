@@ -69,6 +69,15 @@ export async function runExportWorkflow(params: {
 
   const entry = entryResult.data;
 
+  const { data: profile, error: profileError } = await client
+    .from("user_profiles")
+    .select("display_name")
+    .eq("id", userId)
+    .single();
+
+  const displayName =
+    !profileError && profile?.display_name ? profile.display_name : "";
+
   // Multi-photo mode: export uses entry_photos (up to 10).
   const { data: entryPhotos, error: entryPhotosError } = await client
     .from("entry_photos")
@@ -189,6 +198,7 @@ export async function runExportWorkflow(params: {
 
   const pptxBuffer = await generatePhotoTextePptx({
     titleFr: entry.title_fr,
+    displayName,
     photos: pptxPhotos,
     learningBullets,
   });

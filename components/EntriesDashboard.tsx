@@ -186,7 +186,20 @@ export function EntriesDashboard() {
                         aria-label={t('このエントリーを削除', 'Supprimer cette entrée')}
                         title={t('このエントリーを削除', 'Supprimer cette entrée')}
                       >
-                        {deletingId === entry.id ? t('…', '…') : '🗑'}
+                        {deletingId === entry.id ? (
+                          t('…', '…')
+                        ) : (
+                          <svg
+                            className="icon-trash"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>
