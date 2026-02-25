@@ -318,7 +318,7 @@ export default function NewEntryPage() {
                       required
                       maxLength={8000}
                       placeholder={t(
-                        "例: 今日、私は学校の帰り道で夕焼けを見た。",
+                        "Ex : J'ai vu un coucher de soleil.",
                         "Ex : J'ai vu un coucher de soleil.",
                       )}
                       disabled={!activePhoto}
