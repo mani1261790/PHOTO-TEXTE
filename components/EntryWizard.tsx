@@ -138,6 +138,10 @@ export function EntryWizard({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
 
   const [draftSaving, setDraftSaving] = useState(false);
+  const [memoDraft, setMemoDraft] = useState("");
+  const [memoDraftTouched, setMemoDraftTouched] = useState(false);
+  const [memoAutoLoading, setMemoAutoLoading] = useState(false);
+  const memoAutoRequestedRef = useRef<string | null>(null);
   const [diffLoadingId, setDiffLoadingId] = useState<string | null>(null);
   const [diffByPhotoId, setDiffByPhotoId] = useState<
     Record<string, { draft: string; final: string; tokens: DiffToken[] }>
@@ -280,6 +284,9 @@ export function EntryWizard({ id }: { id: string }) {
       router.replace("/login");
       return;
     }
+    setMemoDraft("");
+    setMemoDraftTouched(false);
+    memoAutoRequestedRef.current = null;
     loadAll().catch((err) => setError((err as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, router]);
@@ -367,6 +374,28 @@ export function EntryWizard({ id }: { id: string }) {
 
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [activePhoto?.id, visibleStepKey]);
+
+  useEffect(() => {
+    if (!entry) return;
+    if (memoAutoRequestedRef.current === entry.id) return;
+    if (memoDraftTouched || memoDraft.trim()) return;
+
+    const hasFinal = photos.some((p) => (p.final_fr ?? "").trim());
+    if (!hasFinal) return;
+
+    memoAutoRequestedRef.current = entry.id;
+    setMemoAutoLoading(true);
+    apiFetch<{ suggestions: string[] }>(`/api/entries/${id}/memos/auto`)
+      .then((res) => {
+        if (memoDraftTouched || memoDraft.trim()) return;
+        if (!res.suggestions.length) return;
+        setMemoDraft(res.suggestions.join("\n"));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setMemoAutoLoading(false);
+      });
+  }, [entry, id, memoDraft, memoDraftTouched, photos]);
 
   useEffect(() => {
     if (!activePhoto) return;
@@ -559,8 +588,6 @@ export function EntryWizard({ id }: { id: string }) {
       setBusy(false);
     }
   }
-
-  const [memoDraft, setMemoDraft] = useState("");
 
   if (!entry) {
     return (
@@ -950,12 +977,20 @@ export function EntryWizard({ id }: { id: string }) {
           <textarea
             rows={4}
             value={memoDraft}
-            onChange={(e) => setMemoDraft(e.target.value)}
+            onChange={(e) => {
+              setMemoDraft(e.target.value);
+              setMemoDraftTouched(true);
+            }}
             placeholder={t(
               "新たな単語・文法・気づきなど（改行で複数OK）",
               "Nouveaux mots/grammaire/observations (multi-lignes OK)",
             )}
           />
+          {memoAutoLoading && !memoDraftTouched && !memoDraft.trim() ? (
+            <p className="badge">
+              {t("メモを自動生成中…", "Génération des notes…")}
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={() => {

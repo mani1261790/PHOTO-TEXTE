@@ -8,6 +8,17 @@ type Constraints = {
   politenessPref?: string | null;
 };
 
+type LearningNotePair = {
+  draftFr: string;
+  finalFr: string;
+};
+
+type LearningNoteOptions = {
+  language: 'ja' | 'fr';
+  unknownWords?: string[];
+  maxNotes?: number;
+};
+
 function getOpenAIClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
@@ -85,4 +96,96 @@ export async function rewriteJaToFr(
   });
 
   return parseOutput(response.output_text || '');
+}
+
+function buildLearningNotesInstruction(
+  constraints: Constraints,
+  options: LearningNoteOptions
+): string {
+  const politeness = constraints.politenessPref
+    ? `Politeness preference: ${constraints.politenessPref}.`
+    : 'No explicit politeness preference.';
+
+  const lang = options.language === 'fr' ? 'French' : 'Japanese';
+  return [
+    'You are a language tutor creating learning notes for a student.',
+    `Target CEFR: ${constraints.cefrLevel}.`,
+    `Grammatical gender: ${constraints.grammaticalGender}.`,
+    politeness,
+    `Write the notes in ${lang}.`,
+    'Focus on grammar corrections, vocabulary/expressions, and key fixes between draft and final.',
+    'Keep each bullet concise (one line).',
+    'Return 4-8 bullet lines, no numbering, no extra commentary.'
+  ].join(' ');
+}
+
+function parseLearningNotes(outputText: string): string[] {
+  return parseOutput(outputText)
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[-*•\d.]+\s*/, '').trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+export async function generateLearningNotes(
+  pairs: LearningNotePair[],
+  constraints: Constraints,
+  options: LearningNoteOptions
+): Promise<string[]> {
+  const maxNotes = options.maxNotes ?? 8;
+  const cleanPairs = pairs
+    .map((p) => ({
+      draftFr: (p.draftFr ?? '').trim(),
+      finalFr: (p.finalFr ?? '').trim()
+    }))
+    .filter((p) => p.draftFr && p.finalFr);
+
+  if (!cleanPairs.length) {
+    return [];
+  }
+
+  const client = getOpenAIClient();
+  if (!client) {
+    const fallback = cleanPairs
+      .map((p) => p.finalFr)
+      .filter(Boolean)
+      .slice(0, maxNotes);
+    if (!fallback.length) {
+      return [];
+    }
+    const prefix = options.language === 'fr' ? 'Note' : '学び';
+    return fallback.map((line) => `【${prefix}】${line}`);
+  }
+
+  const unknownWords = (options.unknownWords ?? []).slice(0, 12);
+  const pairsText = cleanPairs
+    .map(
+      (p, idx) =>
+        `Photo ${idx + 1}\nDraft: ${p.draftFr}\nFinal: ${p.finalFr}`
+    )
+    .join('\n\n');
+
+  const response = await client.responses.create({
+    model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+    store: false,
+    input: [
+      {
+        role: 'system',
+        content: buildLearningNotesInstruction(constraints, options)
+      },
+      {
+        role: 'user',
+        content: [
+          'Generate learning notes from the following data.',
+          unknownWords.length
+            ? `Unknown words to prioritize: ${unknownWords.join(', ')}`
+            : 'Unknown words to prioritize: (none)',
+          `Max bullets: ${maxNotes}`,
+          pairsText
+        ].join('\n')
+      }
+    ]
+  });
+
+  return parseLearningNotes(response.output_text || '').slice(0, maxNotes);
 }
