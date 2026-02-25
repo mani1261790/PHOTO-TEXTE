@@ -180,22 +180,24 @@ export function EntriesDashboard() {
                       {entry.entry_photos?.length ? (
                         entry.entry_photos.map((photo) => (
                           <div key={photo.id} className="entry-photo-card">
-                            {photo.photo_preview_url ? (
-                              <img
-                                src={photo.photo_preview_url}
-                                alt={`${entry.title_fr} ${photo.position}`}
-                                className="entry-thumb"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="entry-thumb entry-thumb-empty">
-                                {t('写真なし', 'Pas de photo')}
-                              </div>
-                            )}
-                            <span className="badge">
-                              {t('写真', 'Photo')} {photo.position}
-                            </span>
-                            <p className="entry-photo-text">
+                            <div className="entry-photo-media">
+                              {photo.photo_preview_url ? (
+                                <img
+                                  src={photo.photo_preview_url}
+                                  alt={`${entry.title_fr} ${photo.position}`}
+                                  className="entry-thumb"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="entry-thumb entry-thumb-empty">
+                                  {t('写真なし', 'Pas de photo')}
+                                </div>
+                              )}
+                              <span className="badge">
+                                {t('写真', 'Photo')} {photo.position}
+                              </span>
+                            </div>
+                            <p className="entry-photo-text entry-photo-copy">
                               {photo.final_fr ??
                                 t(
                                   'まだ最終文は生成されていません。',

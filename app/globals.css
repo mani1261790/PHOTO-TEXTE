@@ -812,6 +812,11 @@ button[disabled] {
     scroll-snap-align: start;
 }
 
+.entry-photo-media {
+    display: grid;
+    gap: 6px;
+}
+
 .entry-photo-text {
     margin: 0;
     font-size: 12px;
@@ -891,13 +896,21 @@ button[disabled] {
 @media (min-width: 961px) {
     .entry-photo-strip {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-template-columns: 1fr;
+        gap: 16px;
         overflow: visible;
         scroll-snap-type: none;
     }
 
     .entry-photo-card {
         flex: none;
+        grid-template-columns: 220px minmax(0, 1fr);
+        align-items: start;
+        gap: 16px;
+    }
+
+    .entry-photo-copy {
+        font-size: 13px;
     }
 }
 
