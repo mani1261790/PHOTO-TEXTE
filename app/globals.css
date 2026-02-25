@@ -888,6 +888,19 @@ button[disabled] {
     }
 }
 
+@media (min-width: 961px) {
+    .entry-photo-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        overflow: visible;
+        scroll-snap-type: none;
+    }
+
+    .entry-photo-card {
+        flex: none;
+    }
+}
+
 @media (max-width: 760px) {
     .entries-head {
         align-items: center;
