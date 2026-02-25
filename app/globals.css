@@ -689,6 +689,11 @@ button[disabled] {
     grid-template-columns: 180px 1fr;
     gap: 14px;
     align-items: start;
+    overflow-x: hidden;
+}
+
+.accordion-body > div {
+    min-width: 0;
 }
 
 .entry-thumb {
@@ -796,10 +801,12 @@ button[disabled] {
     overflow-x: auto;
     padding: 4px 2px 6px;
     scroll-snap-type: x proximity;
+    max-width: 100%;
+    width: 100%;
 }
 
 .entry-photo-card {
-    flex: 0 0 220px;
+    flex: 0 0 clamp(180px, 70vw, 220px);
     display: grid;
     gap: 6px;
     scroll-snap-align: start;
@@ -810,6 +817,7 @@ button[disabled] {
     font-size: 12px;
     line-height: 1.6;
     color: #1f2937;
+    overflow-wrap: anywhere;
 }
 
 @media (max-width: 960px) {
