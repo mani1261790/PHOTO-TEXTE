@@ -1,8 +1,8 @@
 import { ImageResponse } from 'next/og';
 
 export const size = {
-  width: 512,
-  height: 512
+  width: 192,
+  height: 192
 };
 
 export const contentType = 'image/png';
@@ -49,11 +49,8 @@ function renderIcon(sizePx: number) {
   );
 }
 
-export default function Icon() {
-  return new ImageResponse(
-    renderIcon(size.width),
-    {
-      ...size
-    }
-  );
+export default function Icon192() {
+  return new ImageResponse(renderIcon(size.width), {
+    ...size
+  });
 }

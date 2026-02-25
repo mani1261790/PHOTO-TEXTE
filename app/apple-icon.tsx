@@ -1,8 +1,8 @@
 import { ImageResponse } from 'next/og';
 
 export const size = {
-  width: 512,
-  height: 512
+  width: 180,
+  height: 180
 };
 
 export const contentType = 'image/png';
@@ -49,11 +49,8 @@ function renderIcon(sizePx: number) {
   );
 }
 
-export default function Icon() {
-  return new ImageResponse(
-    renderIcon(size.width),
-    {
-      ...size
-    }
-  );
+export default function AppleIcon() {
+  return new ImageResponse(renderIcon(size.width), {
+    ...size
+  });
 }
