@@ -9,10 +9,28 @@ import { getAccessToken } from '@/lib/auth/token-store';
 import { useLanguage } from '@/components/LanguageProvider';
 
 const NEW_ENTRY_DRAFT_STORAGE_KEY = 'photo-texte:new-entry-draft:v1';
+const NEW_ENTRY_DRAFT_DB = 'photo-texte-drafts';
+const NEW_ENTRY_DRAFT_STORE = 'new-entry';
+const NEW_ENTRY_DRAFT_ID = 'current';
 
 type LocalNewEntryDraft = {
   titleFr: string;
   draftByPhotoKey: Record<string, string>;
+  updatedAt: string;
+};
+
+type IndexedPhotoDraft = {
+  name: string;
+  type: string;
+  lastModified: number;
+  blob: Blob;
+  draftFr: string;
+};
+
+type IndexedNewEntryDraft = {
+  id: string;
+  titleFr: string;
+  photos: IndexedPhotoDraft[];
   updatedAt: string;
 };
 
@@ -31,6 +49,44 @@ type EntryItem = {
   updated_at: string;
   is_local_draft?: boolean;
 };
+
+function openDraftDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = window.indexedDB.open(NEW_ENTRY_DRAFT_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(NEW_ENTRY_DRAFT_STORE)) {
+        db.createObjectStore(NEW_ENTRY_DRAFT_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function loadIndexedDraft(): Promise<IndexedNewEntryDraft | null> {
+  const db = await openDraftDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(NEW_ENTRY_DRAFT_STORE, 'readonly');
+    const store = tx.objectStore(NEW_ENTRY_DRAFT_STORE);
+    const req = store.get(NEW_ENTRY_DRAFT_ID);
+    req.onsuccess = () => {
+      resolve((req.result as IndexedNewEntryDraft | undefined) ?? null);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function clearIndexedDraft(): Promise<void> {
+  const db = await openDraftDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(NEW_ENTRY_DRAFT_STORE, 'readwrite');
+    tx.objectStore(NEW_ENTRY_DRAFT_STORE).delete(NEW_ENTRY_DRAFT_ID);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
 
 export function EntriesDashboard() {
   const router = useRouter();
@@ -58,38 +114,104 @@ export function EntriesDashboard() {
       return;
     }
 
+    let active = true;
+    const raw = window.localStorage.getItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
+    let parsed: LocalNewEntryDraft | null = null;
     try {
-      const raw = window.localStorage.getItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as LocalNewEntryDraft;
-        const drafts = Object.values(parsed.draftByPhotoKey ?? {}).filter((text) => Boolean(text.trim()));
-        if (parsed.titleFr?.trim() || drafts.length) {
-          setLocalDraft({
-            id: '__local_new_entry__',
-            title_fr: parsed.titleFr?.trim() || t('作成途中の新規エントリー', 'Nouveau brouillon local'),
-            status: 'DRAFT_FR',
-            final_fr: null,
-            photo_preview_url: null,
-            entry_photos: drafts.map((text, idx) => ({
-              id: `__local_photo_${idx + 1}__`,
-              position: idx + 1,
-              final_fr: text,
-              photo_preview_url: null
-            })),
-            updated_at: parsed.updatedAt || new Date().toISOString(),
-            is_local_draft: true
-          });
-        }
-      }
+      parsed = raw ? (JSON.parse(raw) as LocalNewEntryDraft) : null;
     } catch {
-      setLocalDraft(null);
+      parsed = null;
     }
+
+    loadIndexedDraft()
+      .then((indexed) => {
+        if (!active) return;
+
+        const title =
+          indexed?.titleFr?.trim() ||
+          parsed?.titleFr?.trim() ||
+          t('作成途中の新規エントリー', 'Nouveau brouillon local');
+
+        const fromIndexed = (indexed?.photos ?? []).map((photo, idx) => ({
+          id: `__local_photo_${idx + 1}__`,
+          position: idx + 1,
+          final_fr: photo.draftFr ?? null,
+          photo_preview_url: URL.createObjectURL(photo.blob)
+        }));
+
+        const fromStorage = Object.values(parsed?.draftByPhotoKey ?? {})
+          .filter((text) => Boolean(text.trim()))
+          .map((text, idx) => ({
+            id: `__local_photo_${idx + 1}__`,
+            position: idx + 1,
+            final_fr: text,
+            photo_preview_url: null
+          }));
+
+        const entryPhotos = fromIndexed.length ? fromIndexed : fromStorage;
+
+        if (!title.trim() && !entryPhotos.length) {
+          setLocalDraft(null);
+          return;
+        }
+
+        setLocalDraft({
+          id: '__local_new_entry__',
+          title_fr: title,
+          status: 'DRAFT_FR',
+          final_fr: null,
+          photo_preview_url: entryPhotos[0]?.photo_preview_url ?? null,
+          entry_photos: entryPhotos,
+          updated_at: indexed?.updatedAt || parsed?.updatedAt || new Date().toISOString(),
+          is_local_draft: true
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        const drafts = Object.values(parsed?.draftByPhotoKey ?? {}).filter((text) => Boolean(text.trim()));
+        if (!parsed?.titleFr?.trim() && !drafts.length) {
+          setLocalDraft(null);
+          return;
+        }
+        setLocalDraft({
+          id: '__local_new_entry__',
+          title_fr: parsed?.titleFr?.trim() || t('作成途中の新規エントリー', 'Nouveau brouillon local'),
+          status: 'DRAFT_FR',
+          final_fr: null,
+          photo_preview_url: null,
+          entry_photos: drafts.map((text, idx) => ({
+            id: `__local_photo_${idx + 1}__`,
+            position: idx + 1,
+            final_fr: text,
+            photo_preview_url: null
+          })),
+          updated_at: parsed?.updatedAt || new Date().toISOString(),
+          is_local_draft: true
+        });
+      });
 
     apiFetch<{ entries: EntryItem[] }>('/api/entries')
       .then((res) => setEntries(res.entries))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+
+    return () => {
+      active = false;
+    };
   }, [router, language]);
+
+  useEffect(() => {
+    return () => {
+      for (const photo of localDraft?.entry_photos ?? []) {
+        if (!photo.photo_preview_url?.startsWith('blob:')) continue;
+        try {
+          URL.revokeObjectURL(photo.photo_preview_url);
+        } catch {
+          // no-op
+        }
+      }
+    };
+  }, [localDraft]);
 
   const orderedEntries = useMemo(
     () => [...(localDraft ? [localDraft] : []), ...entries].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
@@ -118,6 +240,7 @@ export function EntriesDashboard() {
         return;
       }
       window.localStorage.removeItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
+      void clearIndexedDraft().catch(() => undefined);
       setLocalDraft(null);
       return;
     }
