@@ -8,6 +8,9 @@ import { getAccessToken } from "@/lib/auth/token-store";
 import { useLanguage } from "@/components/LanguageProvider";
 
 const NEW_ENTRY_DRAFT_STORAGE_KEY = "photo-texte:new-entry-draft:v1";
+const NEW_ENTRY_DRAFT_DB = "photo-texte-drafts";
+const NEW_ENTRY_DRAFT_STORE = "new-entry";
+const NEW_ENTRY_DRAFT_ID = "current";
 
 type PhotoDraft = {
   file: File;
@@ -21,8 +24,75 @@ type NewEntryAutoDraft = {
   updatedAt: string;
 };
 
+type IndexedPhotoDraft = {
+  name: string;
+  type: string;
+  lastModified: number;
+  blob: Blob;
+  draftFr: string;
+};
+
+type IndexedNewEntryDraft = {
+  id: string;
+  titleFr: string;
+  photos: IndexedPhotoDraft[];
+  updatedAt: string;
+};
+
 function photoDraftKey(file: File): string {
   return `${file.name}::${file.size}::${file.lastModified}`;
+}
+
+function openDraftDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = window.indexedDB.open(NEW_ENTRY_DRAFT_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(NEW_ENTRY_DRAFT_STORE)) {
+        db.createObjectStore(NEW_ENTRY_DRAFT_STORE, { keyPath: "id" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function loadIndexedDraft(): Promise<IndexedNewEntryDraft | null> {
+  const db = await openDraftDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(NEW_ENTRY_DRAFT_STORE, "readonly");
+    const store = tx.objectStore(NEW_ENTRY_DRAFT_STORE);
+    const req = store.get(NEW_ENTRY_DRAFT_ID);
+    req.onsuccess = () => {
+      resolve((req.result as IndexedNewEntryDraft | undefined) ?? null);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveIndexedDraft(
+  payload: Omit<IndexedNewEntryDraft, "id">,
+): Promise<void> {
+  const db = await openDraftDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(NEW_ENTRY_DRAFT_STORE, "readwrite");
+    const store = tx.objectStore(NEW_ENTRY_DRAFT_STORE);
+    store.put({ ...payload, id: NEW_ENTRY_DRAFT_ID });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function clearIndexedDraft(): Promise<void> {
+  const db = await openDraftDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(NEW_ENTRY_DRAFT_STORE, "readwrite");
+    tx.objectStore(NEW_ENTRY_DRAFT_STORE).delete(NEW_ENTRY_DRAFT_ID);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
 }
 
 export default function NewEntryPage() {
@@ -49,15 +119,41 @@ export default function NewEntryPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
-    if (!raw) return;
-
-    try {
-      const parsed = JSON.parse(raw) as NewEntryAutoDraft;
-      setTitleFr(parsed.titleFr ?? "");
-      setSavedDraftByPhotoKey(parsed.draftByPhotoKey ?? {});
-    } catch {
-      // Ignore invalid cached content.
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as NewEntryAutoDraft;
+        setTitleFr(parsed.titleFr ?? "");
+        setSavedDraftByPhotoKey(parsed.draftByPhotoKey ?? {});
+      } catch {
+        // Ignore invalid cached content.
+      }
     }
+
+    loadIndexedDraft()
+      .then((draft) => {
+        if (!draft) return;
+        setTitleFr(draft.titleFr ?? "");
+        const restored = (draft.photos ?? []).map((p) => {
+          const file = new File([p.blob], p.name, {
+            type: p.type,
+            lastModified: p.lastModified,
+          });
+          return {
+            file,
+            previewUrl: URL.createObjectURL(file),
+            draftFr: p.draftFr ?? "",
+          };
+        });
+        setPhotos(restored);
+        setSavedDraftByPhotoKey(
+          Object.fromEntries(
+            restored.map((p) => [photoDraftKey(p.file), p.draftFr]),
+          ),
+        );
+      })
+      .catch(() => {
+        // Ignore IndexedDB errors and continue without restore.
+      });
   }, []);
 
   // Cleanup object URLs on unmount / when photos list changes.
@@ -107,6 +203,7 @@ export default function NewEntryPage() {
       if (!titleFr.trim() && Object.keys(draftByPhotoKey).length === 0) {
         window.localStorage.removeItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
         setSavedDraftByPhotoKey({});
+        void clearIndexedDraft().catch(() => undefined);
         return;
       }
 
@@ -120,6 +217,18 @@ export default function NewEntryPage() {
         JSON.stringify(payload),
       );
       setSavedDraftByPhotoKey(draftByPhotoKey);
+
+      void saveIndexedDraft({
+        titleFr,
+        photos: photos.map((p) => ({
+          name: p.file.name,
+          type: p.file.type,
+          lastModified: p.file.lastModified,
+          blob: p.file,
+          draftFr: p.draftFr,
+        })),
+        updatedAt: payload.updatedAt,
+      }).catch(() => undefined);
     }, 500);
 
     return () => clearTimeout(timer);
@@ -244,6 +353,7 @@ export default function NewEntryPage() {
 
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
+        void clearIndexedDraft().catch(() => undefined);
       }
       router.push(`/entries/${created.entry.id}`);
     } catch (err) {
