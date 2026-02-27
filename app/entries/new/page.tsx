@@ -7,11 +7,23 @@ import { apiFetch, apiFetchForm } from "@/lib/api/fetcher";
 import { getAccessToken } from "@/lib/auth/token-store";
 import { useLanguage } from "@/components/LanguageProvider";
 
+const NEW_ENTRY_DRAFT_STORAGE_KEY = "photo-texte:new-entry-draft:v1";
+
 type PhotoDraft = {
   file: File;
   previewUrl: string;
   draftFr: string;
 };
+
+type NewEntryAutoDraft = {
+  titleFr: string;
+  draftByPhotoKey: Record<string, string>;
+  updatedAt: string;
+};
+
+function photoDraftKey(file: File): string {
+  return `${file.name}::${file.size}::${file.lastModified}`;
+}
 
 export default function NewEntryPage() {
   const router = useRouter();
@@ -21,6 +33,9 @@ export default function NewEntryPage() {
   const [titleFr, setTitleFr] = useState("");
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [savedDraftByPhotoKey, setSavedDraftByPhotoKey] = useState<
+    Record<string, string>
+  >({});
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,6 +45,20 @@ export default function NewEntryPage() {
       router.replace("/login");
     }
   }, [router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as NewEntryAutoDraft;
+      setTitleFr(parsed.titleFr ?? "");
+      setSavedDraftByPhotoKey(parsed.draftByPhotoKey ?? {});
+    } catch {
+      // Ignore invalid cached content.
+    }
+  }, []);
 
   // Cleanup object URLs on unmount / when photos list changes.
   useEffect(() => {
@@ -65,6 +94,37 @@ export default function NewEntryPage() {
     return true;
   }, [busy, titleFr, photos]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const timer = setTimeout(() => {
+      const draftByPhotoKey = Object.fromEntries(
+        photos
+          .map((p) => [photoDraftKey(p.file), p.draftFr] as const)
+          .filter(([, value]) => Boolean(value.trim())),
+      );
+
+      if (!titleFr.trim() && Object.keys(draftByPhotoKey).length === 0) {
+        window.localStorage.removeItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
+        setSavedDraftByPhotoKey({});
+        return;
+      }
+
+      const payload: NewEntryAutoDraft = {
+        titleFr,
+        draftByPhotoKey,
+        updatedAt: new Date().toISOString(),
+      };
+      window.localStorage.setItem(
+        NEW_ENTRY_DRAFT_STORAGE_KEY,
+        JSON.stringify(payload),
+      );
+      setSavedDraftByPhotoKey(draftByPhotoKey);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [titleFr, photos]);
+
   function onPickFiles(files: FileList | null) {
     if (!files) return;
 
@@ -82,7 +142,7 @@ export default function NewEntryPage() {
     const next: PhotoDraft[] = toAdd.map((file) => ({
       file,
       previewUrl: URL.createObjectURL(file),
-      draftFr: "",
+      draftFr: savedDraftByPhotoKey[photoDraftKey(file)] ?? "",
     }));
 
     setPhotos((prev) => [...prev, ...next]);
@@ -182,6 +242,9 @@ export default function NewEntryPage() {
         },
       );
 
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
+      }
       router.push(`/entries/${created.entry.id}`);
     } catch (err) {
       setError((err as Error).message);
@@ -244,15 +307,8 @@ export default function NewEntryPage() {
                 ))}
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 12,
-                  marginTop: 12,
-                  alignItems: "flex-start",
-                }}
-              >
-                <div style={{ width: 320 }}>
+              <div className="new-entry-editor">
+                <div className="new-entry-preview-panel">
                   {activePhoto ? (
                     <img
                       src={activePhoto.previewUrl}
@@ -298,7 +354,7 @@ export default function NewEntryPage() {
                   </div>
                 </div>
 
-                <div style={{ flex: 1 }}>
+                <div className="new-entry-draft-panel">
                   <label>
                     {t(
                       `写真 ${activeIndex + 1} のフランス語テキスト`,

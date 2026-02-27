@@ -8,6 +8,14 @@ import { apiFetch } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
 import { useLanguage } from '@/components/LanguageProvider';
 
+const NEW_ENTRY_DRAFT_STORAGE_KEY = 'photo-texte:new-entry-draft:v1';
+
+type LocalNewEntryDraft = {
+  titleFr: string;
+  draftByPhotoKey: Record<string, string>;
+  updatedAt: string;
+};
+
 type EntryItem = {
   id: string;
   title_fr: string;
@@ -21,6 +29,7 @@ type EntryItem = {
     photo_preview_url: string | null;
   }[];
   updated_at: string;
+  is_local_draft?: boolean;
 };
 
 export function EntriesDashboard() {
@@ -38,6 +47,7 @@ export function EntriesDashboard() {
   const [entries, setEntries] = useState<EntryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [localDraft, setLocalDraft] = useState<EntryItem | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]['value']>('ALL');
   const [loading, setLoading] = useState(true);
@@ -48,15 +58,42 @@ export function EntriesDashboard() {
       return;
     }
 
+    try {
+      const raw = window.localStorage.getItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as LocalNewEntryDraft;
+        const drafts = Object.values(parsed.draftByPhotoKey ?? {}).filter((text) => Boolean(text.trim()));
+        if (parsed.titleFr?.trim() || drafts.length) {
+          setLocalDraft({
+            id: '__local_new_entry__',
+            title_fr: parsed.titleFr?.trim() || t('作成途中の新規エントリー', 'Nouveau brouillon local'),
+            status: 'DRAFT_FR',
+            final_fr: null,
+            photo_preview_url: null,
+            entry_photos: drafts.map((text, idx) => ({
+              id: `__local_photo_${idx + 1}__`,
+              position: idx + 1,
+              final_fr: text,
+              photo_preview_url: null
+            })),
+            updated_at: parsed.updatedAt || new Date().toISOString(),
+            is_local_draft: true
+          });
+        }
+      }
+    } catch {
+      setLocalDraft(null);
+    }
+
     apiFetch<{ entries: EntryItem[] }>('/api/entries')
       .then((res) => setEntries(res.entries))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, language]);
 
   const orderedEntries = useMemo(
-    () => [...entries].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
-    [entries]
+    () => [...(localDraft ? [localDraft] : []), ...entries].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
+    [entries, localDraft]
   );
 
   const filteredEntries = useMemo(() => {
@@ -76,6 +113,15 @@ export function EntriesDashboard() {
   }, [orderedEntries, query, statusFilter]);
 
   async function deleteEntry(entry: EntryItem) {
+    if (entry.is_local_draft) {
+      if (!confirm(t('この端末の作成途中データを削除します。よろしいですか？', 'Supprimer ce brouillon local de cet appareil ?'))) {
+        return;
+      }
+      window.localStorage.removeItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
+      setLocalDraft(null);
+      return;
+    }
+
     if (
       !confirm(
         t(
@@ -122,7 +168,7 @@ export function EntriesDashboard() {
       <div className="card panel-highlight">
         <div className="section-head entries-head">
           <h1>{t('エントリー一覧', 'Entrées')}</h1>
-          <span className="badge">{t(`全 ${entries.length} 件`, `Total ${entries.length}`)}</span>
+          <span className="badge">{t(`全 ${orderedEntries.length} 件`, `Total ${orderedEntries.length}`)}</span>
         </div>
       </div>
 
@@ -170,6 +216,11 @@ export function EntriesDashboard() {
                       {t('更新', 'Mis à jour')}:{' '}
                       {formatUpdatedAt(entry.updated_at)}（{new Date(entry.updated_at).toLocaleString()}）
                     </div>
+                    {entry.is_local_draft ? (
+                      <div className="timeline-detail">
+                        {t('この端末の下書き', 'Brouillon local (cet appareil)')}
+                      </div>
+                    ) : null}
                   </div>
                 </summary>
 
@@ -213,7 +264,7 @@ export function EntriesDashboard() {
                       )}
                     </div>
                     <div className="entry-actions">
-                      <Link href={`/entries/${entry.id}`} className="entry-open-btn">
+                      <Link href={entry.is_local_draft ? '/entries/new' : `/entries/${entry.id}`} className="entry-open-btn">
                         {t('このエントリーを開く', 'Ouvrir cette entrée')}
                       </Link>
                       <button

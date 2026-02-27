@@ -722,6 +722,25 @@ button[disabled] {
     margin: 0 auto;
 }
 
+.new-entry-editor {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.new-entry-preview-panel {
+    width: 100%;
+    max-width: 320px;
+    flex: 1 1 280px;
+}
+
+.new-entry-draft-panel {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
 .field-meta {
     display: block;
     margin-top: -8px;
@@ -934,6 +953,14 @@ button[disabled] {
 
     .new-entry-simple {
         max-width: none;
+    }
+
+    .new-entry-preview-panel {
+        max-width: none;
+    }
+
+    .new-entry-draft-panel {
+        flex-basis: 100%;
     }
 
     .new-entry-simple .timeline-detail,
