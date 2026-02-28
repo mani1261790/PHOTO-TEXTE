@@ -127,10 +127,9 @@ export function EntriesDashboard() {
       .then((indexed) => {
         if (!active) return;
 
-        const title =
-          indexed?.titleFr?.trim() ||
-          parsed?.titleFr?.trim() ||
-          t('作成途中の新規エントリー', 'Nouveau brouillon local');
+        const indexedTitle = indexed?.titleFr?.trim() ?? '';
+        const storageTitle = parsed?.titleFr?.trim() ?? '';
+        const hasAnyTitle = Boolean(indexedTitle || storageTitle);
 
         const fromIndexed = (indexed?.photos ?? []).map((photo, idx) => ({
           id: `__local_photo_${idx + 1}__`,
@@ -149,11 +148,17 @@ export function EntriesDashboard() {
           }));
 
         const entryPhotos = fromIndexed.length ? fromIndexed : fromStorage;
+        const hasAnyContent = hasAnyTitle || entryPhotos.length > 0;
 
-        if (!title.trim() && !entryPhotos.length) {
+        if (!hasAnyContent) {
           setLocalDraft(null);
           return;
         }
+
+        const title =
+          indexedTitle ||
+          storageTitle ||
+          t('作成途中の新規エントリー', 'Nouveau brouillon local');
 
         setLocalDraft({
           id: '__local_new_entry__',

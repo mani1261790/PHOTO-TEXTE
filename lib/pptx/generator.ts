@@ -426,7 +426,7 @@ export async function generatePhotoTextePptx(
       position: Number.isFinite(p.position) ? p.position : idx + 1,
       draftFr: p.draftFr ?? "",
       jpAuto: p.jpAuto ?? "",
-      jpIntent: p.jpIntent ?? p.jpAuto ?? "",
+      jpIntent: p.jpIntent ?? "",
       finalFr: p.finalFr ?? "",
     }));
 

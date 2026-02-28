@@ -96,11 +96,11 @@ export async function runExportWorkflow(params: {
   const hasMultiPhotos = photos.length > 0;
 
   if (hasMultiPhotos) {
-    const notReady = photos.some((p) => !p.final_fr || !p.jp_auto);
+    const notReady = photos.some((p) => !p.final_fr || !p.jp_auto || !p.jp_intent);
     if (notReady) {
       conflict(
         "ENTRY_NOT_READY",
-        "All photos must be fully generated before export",
+        "All photos must include JP auto/intent and final FR before export",
       );
     }
     const anyNotExportable = photos.some(
@@ -114,10 +114,10 @@ export async function runExportWorkflow(params: {
     }
   } else {
     // Legacy single-photo mode fallback (pre multi-photo migration).
-    if (!entry.final_fr || !entry.jp_auto) {
+    if (!entry.final_fr || !entry.jp_auto || !entry.jp_intent) {
       conflict(
         "ENTRY_NOT_READY",
-        "Entry must be fully generated before export",
+        "Entry must include JP auto/intent and final FR before export",
       );
     }
     if (entry.status !== "FINAL_FR_READY" && entry.status !== "EXPORTED") {
@@ -189,7 +189,7 @@ export async function runExportWorkflow(params: {
         position: p.position ?? 1,
         draftFr: p.draft_fr ?? "",
         jpAuto: p.jp_auto ?? "",
-        jpIntent: p.jp_intent ?? p.jp_auto ?? "",
+        jpIntent: p.jp_intent ?? "",
         finalFr: p.final_fr ?? "",
         photoBase64,
       };
