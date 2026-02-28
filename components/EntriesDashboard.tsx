@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
+import { DiffToken } from '@/lib/diff/read-only';
 import { useLanguage } from '@/components/LanguageProvider';
 
 const NEW_ENTRY_DRAFT_STORAGE_KEY = 'photo-texte:new-entry-draft:v1';
@@ -48,6 +49,12 @@ type EntryItem = {
   }[];
   updated_at: string;
   is_local_draft?: boolean;
+};
+
+type PhotoDiffResponse = {
+  diff: {
+    tokens: DiffToken[];
+  };
 };
 
 function openDraftDb(): Promise<IDBDatabase> {
@@ -104,6 +111,10 @@ export function EntriesDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [localDraft, setLocalDraft] = useState<EntryItem | null>(null);
+  const [openDiffByPhotoKey, setOpenDiffByPhotoKey] = useState<Record<string, boolean>>({});
+  const [diffByPhotoKey, setDiffByPhotoKey] = useState<Record<string, DiffToken[]>>({});
+  const [diffLoadingPhotoKey, setDiffLoadingPhotoKey] = useState<string | null>(null);
+  const [diffErrorByPhotoKey, setDiffErrorByPhotoKey] = useState<Record<string, string>>({});
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statusOptions)[number]['value']>('ALL');
   const [loading, setLoading] = useState(true);
@@ -272,6 +283,40 @@ export function EntriesDashboard() {
     }
   }
 
+  async function togglePhotoDiff(entry: EntryItem, photoId: string) {
+    if (entry.is_local_draft) return;
+    const key = `${entry.id}:${photoId}`;
+    const currentlyOpen = Boolean(openDiffByPhotoKey[key]);
+    if (currentlyOpen) {
+      setOpenDiffByPhotoKey((prev) => ({ ...prev, [key]: false }));
+      return;
+    }
+
+    setOpenDiffByPhotoKey((prev) => ({ ...prev, [key]: true }));
+    if (diffByPhotoKey[key]) return;
+
+    setDiffLoadingPhotoKey(key);
+    setDiffErrorByPhotoKey((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+    try {
+      const res = await apiFetch<PhotoDiffResponse>(
+        `/api/entries/${entry.id}/photos/${photoId}/diff`
+      );
+      setDiffByPhotoKey((prev) => ({ ...prev, [key]: res.diff.tokens ?? [] }));
+    } catch (err) {
+      setDiffErrorByPhotoKey((prev) => ({
+        ...prev,
+        [key]: (err as Error).message
+      }));
+    } finally {
+      setDiffLoadingPhotoKey((current) => (current === key ? null : current));
+    }
+  }
+
   function formatUpdatedAt(value: string) {
     const date = new Date(value);
     const diffMs = Date.now() - date.getTime();
@@ -383,6 +428,56 @@ export function EntriesDashboard() {
                                   'Le texte final n’est pas prêt.'
                                 )}
                             </p>
+                            {!entry.is_local_draft ? (
+                              <div className="entry-photo-tools">
+                                <button
+                                  type="button"
+                                  className="entry-diff-btn"
+                                  onClick={() => void togglePhotoDiff(entry, photo.id)}
+                                >
+                                  <svg className="icon-diff" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path
+                                      d="M5 4h14v2H5V4zm0 7h6v2H5v-2zm0 7h14v2H5v-2zm10-8 4 3-4 3v-2h-3v-2h3v-2z"
+                                      fill="currentColor"
+                                    />
+                                  </svg>
+                                  <span>
+                                    {openDiffByPhotoKey[`${entry.id}:${photo.id}`]
+                                      ? t('差分を隠す', 'Masquer le diff')
+                                      : t('差分を表示', 'Afficher le diff')}
+                                  </span>
+                                </button>
+                              </div>
+                            ) : null}
+                            {openDiffByPhotoKey[`${entry.id}:${photo.id}`] ? (
+                              <div className="entry-photo-diff">
+                                {diffLoadingPhotoKey === `${entry.id}:${photo.id}` ? (
+                                  <p className="badge">{t('差分を読み込み中…', 'Chargement du diff…')}</p>
+                                ) : diffErrorByPhotoKey[`${entry.id}:${photo.id}`] ? (
+                                  <p className="badge">{t('差分の取得に失敗しました。', 'Échec du chargement du diff.')}</p>
+                                ) : (
+                                  <pre className="diff-block">
+                                    {(diffByPhotoKey[`${entry.id}:${photo.id}`] ?? []).map((token, idx) => {
+                                      if (token.kind === 'add') {
+                                        return (
+                                          <span key={idx} className="diff-add">
+                                            +{token.value}
+                                          </span>
+                                        );
+                                      }
+                                      if (token.kind === 'remove') {
+                                        return (
+                                          <span key={idx} className="diff-remove">
+                                            -{token.value}
+                                          </span>
+                                        );
+                                      }
+                                      return <span key={idx}>{token.value}</span>;
+                                    })}
+                                  </pre>
+                                )}
+                              </div>
+                            ) : null}
                           </div>
                         ))
                       ) : (
