@@ -75,10 +75,15 @@ function LoginContent() {
       if (!json.access_token) {
         if (mode === 'signup') {
           setNotice(
-            t(
-              '確認メールを送信しました。メール内のリンクで確認を完了した後、この画面でログインしてください。',
-              "E-mail de confirmation envoyé. Ouvrez le lien, puis connectez-vous ici."
-            )
+            json.password_reset_requested
+              ? t(
+                  'このメールアドレスは登録済みです。パスワード再設定メールを送信しました。メール内のリンクから何度でも再設定できます。',
+                  "Cette adresse e-mail est déjà inscrite. Un e-mail de réinitialisation a été envoyé ; vous pouvez réinitialiser autant de fois que nécessaire via ce lien."
+                )
+              : t(
+                  '確認メールを送信しました。メール内のリンクで確認を完了した後、この画面でログインしてください。',
+                  "E-mail de confirmation envoyé. Ouvrez le lien, puis connectez-vous ici."
+                )
           );
           switchMode('login');
           return;

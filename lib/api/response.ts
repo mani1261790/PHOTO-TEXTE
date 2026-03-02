@@ -14,6 +14,7 @@ const codeToJaMessage: Record<string, string> = {
   LOGIN_FAILED: 'メールアドレスまたはパスワードが正しくありません。',
   SIGNUP_FAILED: 'アカウントを作成できませんでした。',
   PROFILE_CREATE_FAILED: 'プロフィール初期化に失敗しました。',
+  PASSWORD_RESET_FAILED: 'パスワードの再設定メール送信に失敗しました。',
   PROFILE_NOT_FOUND: 'プロフィールが見つかりません。',
   PROFILE_UPDATE_FAILED: 'プロフィール更新に失敗しました。',
   ENTRY_NOT_FOUND: 'エントリーが見つかりません。',

@@ -17,6 +17,29 @@ export async function POST(req: NextRequest) {
       password: payload.password
     });
 
+    const signUpErrorCode = signUpResult.error?.code?.toLowerCase() ?? '';
+    const signUpErrorMessage = signUpResult.error?.message?.toLowerCase() ?? '';
+    const isAlreadyRegistered =
+      signUpErrorCode === 'user_already_exists' ||
+      signUpErrorCode === 'email_exists' ||
+      signUpErrorMessage.includes('already registered') ||
+      signUpErrorMessage.includes('already exists');
+
+    if (isAlreadyRegistered) {
+      const resetResult = await anon.auth.resetPasswordForEmail(payload.email);
+      if (resetResult.error) {
+        badRequest('PASSWORD_RESET_FAILED', 'Unable to send password reset email');
+      }
+
+      return ok({
+        user_id: null,
+        access_token: null,
+        refresh_token: null,
+        email_confirmation_required: true,
+        password_reset_requested: true
+      });
+    }
+
     if (signUpResult.error || !signUpResult.data.user) {
       badRequest('SIGNUP_FAILED', 'Unable to create account');
     }
