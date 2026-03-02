@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     // Create entry first.
     // For multi-photo entries, we store only title + status here.
     // Keep status as DRAFT_FR initially; the per-photo records carry the real workflow status.
-    const { data: entry, error: entryError } = await client
+    let { data: entry, error: entryError } = await client
       .from('entries')
       .insert({
         user_id: user.id,
@@ -72,6 +72,27 @@ export async function POST(req: NextRequest) {
       })
       .select('id,user_id,title_fr,status,created_at,updated_at')
       .single();
+
+    // Backward-compatible fallback:
+    // some environments may still have `entries.photo_asset_id NOT NULL`
+    // (multi-photo migration not applied yet). In that case we populate
+    // legacy single-photo fields with the first photo to keep creation working.
+    if (entryError?.code === '23502' && !entry) {
+      const firstPhoto = payload.photos[0];
+      const retry = await client
+        .from('entries')
+        .insert({
+          user_id: user.id,
+          title_fr: payload.title_fr,
+          draft_fr: firstPhoto.draft_fr,
+          photo_asset_id: firstPhoto.photo_asset_id,
+          status: 'DRAFT_FR'
+        })
+        .select('id,user_id,title_fr,status,created_at,updated_at')
+        .single();
+      entry = retry.data;
+      entryError = retry.error;
+    }
 
     if (entryError || !entry) {
       badRequest('ENTRY_CREATE_FAILED', 'Unable to create entry');
