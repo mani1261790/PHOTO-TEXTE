@@ -28,16 +28,36 @@ export async function POST(req: NextRequest) {
     const emailEncrypted = encryptField(dataKey, payload.email);
 
     const service = createServiceClient();
-    const { error: profileError } = await service.from('user_profiles').insert({
+    const baseProfilePayload = {
       id: user.id,
       email_encrypted: emailEncrypted,
       wrapped_data_key: wrappedDataKey,
       display_name: payload.display_name ?? null,
       grammatical_gender: payload.grammatical_gender,
       cefr_level: payload.cefr_level,
-      politeness_pref: payload.politeness_pref ?? null,
-      service_language: payload.service_language
-    });
+      politeness_pref: payload.politeness_pref ?? null
+    };
+
+    // NOTE:
+    // - Newer schema has `service_language`, older instances may not.
+    // - `upsert` keeps signup idempotent when user_profiles row already exists.
+    let { error: profileError } = await service.from('user_profiles').upsert(
+      {
+        ...baseProfilePayload,
+        service_language: payload.service_language
+      },
+      { onConflict: 'id' }
+    );
+
+    if (
+      profileError &&
+      /service_language/i.test(profileError.message) &&
+      /(column|schema cache)/i.test(profileError.message)
+    ) {
+      ({ error: profileError } = await service
+        .from('user_profiles')
+        .upsert(baseProfilePayload, { onConflict: 'id' }));
+    }
 
     if (profileError) {
       badRequest('PROFILE_CREATE_FAILED', 'Unable to initialize profile');
