@@ -324,17 +324,18 @@ export default function NewEntryPage() {
 
     try {
       // 1) Upload each photo -> asset id
-      const uploaded = await Promise.all(
-        photos.map(async (p) => {
-          const form = new FormData();
-          form.append("file", p.file);
-          const asset = await apiFetchForm<{ id: string }>(
-            "/api/assets/photo",
-            form,
-          );
-          return { assetId: asset.id, draftFr: p.draftFr };
-        }),
-      );
+      // Upload sequentially to avoid intermittent browser/network failures
+      // with concurrent multipart requests (seen as "Load failed" in UI).
+      const uploaded: Array<{ assetId: string; draftFr: string }> = [];
+      for (const p of photos) {
+        const form = new FormData();
+        form.append("file", p.file);
+        const asset = await apiFetchForm<{ id: string }>(
+          "/api/assets/photo",
+          form,
+        );
+        uploaded.push({ assetId: asset.id, draftFr: p.draftFr });
+      }
 
       // 2) Create multi-photo entry + per-photo records
       const created = await apiFetch<{ entry: { id: string } }>(
@@ -357,7 +358,15 @@ export default function NewEntryPage() {
       }
       router.push(`/entries/${created.entry.id}`);
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message || "";
+      setError(
+        message === "Load failed"
+          ? t(
+              "通信に失敗しました。時間をおいて再度お試しください。",
+              "Échec de communication. Veuillez réessayer dans un instant.",
+            )
+          : message,
+      );
     } finally {
       setBusy(false);
     }
