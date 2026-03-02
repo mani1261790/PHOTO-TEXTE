@@ -243,13 +243,16 @@ export function EntryWizard({ id }: { id: string }) {
   );
 
   async function loadAll() {
-    const [entryData, photosData, memoData] = await Promise.all([
+    const [entryData, photosData] = await Promise.all([
       apiFetch<Entry>(`/api/entries/${id}`),
       apiFetch<{ entry_id: string; photos: EntryPhoto[] }>(
         `/api/entries/${id}/photos`,
       ),
-      apiFetch<{ memos: Memo[] }>(`/api/entries/${id}/memos`),
     ]);
+
+    const memoData = await apiFetch<{ memos: Memo[] }>(`/api/entries/${id}/memos`).catch(
+      () => ({ memos: [] }),
+    );
 
     setEntry(entryData);
 
