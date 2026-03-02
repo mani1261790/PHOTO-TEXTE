@@ -275,20 +275,14 @@ export default function NewEntryPage() {
     });
   }
 
-  function movePhoto(from: number, to: number) {
-    setPhotos((prev) => {
-      if (from < 0 || to < 0 || from >= prev.length || to >= prev.length)
-        return prev;
-      const copy = [...prev];
-      const [item] = copy.splice(from, 1);
-      copy.splice(to, 0, item);
-      return copy;
-    });
+  function goToPhoto(nextIndex: number) {
     setActiveIndex((current) => {
-      if (current === from) return to;
-      if (from < current && current <= to) return current - 1;
-      if (to <= current && current < from) return current + 1;
-      return current;
+      const max = photos.length - 1;
+      if (max < 0) return 0;
+      if (nextIndex < 0) return 0;
+      if (nextIndex > max) return max;
+      if (nextIndex === current) return current;
+      return nextIndex;
     });
   }
 
@@ -451,17 +445,17 @@ export default function NewEntryPage() {
                   >
                     <button
                       type="button"
-                      onClick={() => movePhoto(activeIndex, activeIndex - 1)}
+                      onClick={() => goToPhoto(activeIndex - 1)}
                       disabled={busy || activeIndex === 0}
                     >
-                      {t("← 左へ", "← À gauche")}
+                      {t("← 前の写真", "← Photo précédente")}
                     </button>
                     <button
                       type="button"
-                      onClick={() => movePhoto(activeIndex, activeIndex + 1)}
+                      onClick={() => goToPhoto(activeIndex + 1)}
                       disabled={busy || activeIndex === photos.length - 1}
                     >
-                      {t("右へ →", "À droite →")}
+                      {t("次の写真 →", "Photo suivante →")}
                     </button>
                     <button
                       type="button"
