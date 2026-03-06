@@ -1,57 +1,169 @@
 # PHOTO-TEXTE
 
-プライバシー重視の PHOTO-TEXTE 作成アプリです。  
-構成は **Vercel + Supabase + OpenAI API** を前提にしています。
+プライバシー重視の PHOTO-TEXTE 作成アプリです（Next.js + Supabase + OpenAI API）。
 
-## 1. 技術構成
+## 概要
 
-- Next.js (App Router) + TypeScript
-- Supabase (Auth / Postgres / Storage)
-- OpenAI API（翻訳・リライト）
-- PPTX生成（サーバー側）
+- **目的**: 写真ごとのフランス語下書きから、日本語意図整理→最終フランス語化→PPTX出力までを一貫処理。
+- **主な構成**: Next.js (App Router) / Supabase (Auth, Postgres, Storage) / OpenAI API（未設定時はフォールバック文生成）。
+- **データモデルの要点**:
+  - 現行: `entries` + `entry_photos`（複数写真）
+  - 互換: `entries` 単体（旧・単写真フロー）
 
-## 2. 事前準備
+---
 
-- Node.js 20+
-- npm
-- Supabaseアカウント
-- Vercelアカウント
-- OpenAI APIキー（任意だが推奨）
+## システム全体フロー（精密版）
 
-## 3. Supabaseセットアップ
+```mermaid
+flowchart TD
+    A[ユーザーアクセス] --> B{ログイン済み?}
+    B -- No --> C[サインアップ/ログイン API]
+    C --> C1{signupで既存ユーザー?}
+    C1 -- Yes --> C2[パスワードリセット送信して終了]
+    C1 -- No --> C3[Auth作成 + user_profiles初期化]
+    C3 --> D
+    C2 --> B
+    B -- Yes --> D[ダッシュボード表示 / エントリー一覧取得]
 
-### 3-1. プロジェクト作成
+    D --> E[写真アップロード API]
+    E --> E1{レート制限内?}
+    E1 -- No --> X1[429系エラー]
+    E1 -- Yes --> E2{file存在 & 8MB以下?}
+    E2 -- No --> X2[入力エラー]
+    E2 -- Yes --> E3[EXIF除去/サニタイズ]
+    E3 --> E4[Storage保存 + assets登録]
 
-Supabaseで新規プロジェクトを作成。
+    E4 --> F{新規エントリー作成種別}
+    F -- 複数写真 --> G[/api/entries/multi]
+    G --> G1{photo_asset_id重複なし?}
+    G1 -- No --> X3[DUPLICATE_PHOTO]
+    G1 -- Yes --> G2{asset存在 & 所有者一致?}
+    G2 -- No --> X4[ASSET_NOT_FOUND / ASSET_FORBIDDEN]
+    G2 -- Yes --> G3[entries作成 status=DRAFT_FR]
+    G3 --> G4{旧スキーマで NOT NULL 制約?
+    （photo_asset_id）}
+    G4 -- Yes --> G5[先頭写真で互換insertリトライ]
+    G4 -- No --> G6[entry_photosをposition順でinsert]
+    G5 --> G6
 
-### 3-2. マイグレーション実行
+    F -- 単写真(互換) --> H[/api/entries]
+    H --> H1[entries作成 status=DRAFT_FR]
 
-Supabase `SQL Editor` で以下を実行:
+    G6 --> I[編集フェーズ]
+    H1 --> I
 
-- `supabase/migrations/202602050001_init_photo_texte.sql`
+    I --> I1[下書き更新]
+    I1 --> I2{状態が DRAFT_FR or JP_AUTO_READY ?}
+    I2 -- No --> X5[ENTRY_LOCKED / 更新拒否]
+    I2 -- Yes --> I3[更新反映]
 
-### 3-3. APIキー確認
+    I --> J[翻訳 API]
+    J --> J1{レート制限内?}
+    J1 -- No --> X1
+    J1 -- Yes --> J2{対象存在 & 所有者一致?}
+    J2 -- No --> X6[ENTRY(_PHOTO)_NOT_FOUND]
+    J2 -- Yes --> J3{draft更新可能状態?}
+    J3 -- No --> X5
+    J3 -- Yes --> J4[FR→JA 翻訳]
+    J4 --> J5[JP_AUTO_READYへ遷移]
 
-`Project Settings -> API` で取得:
+    I --> K[意図ロック/リライト API]
+    K --> K1{レート制限内?}
+    K1 -- No --> X1
+    K1 -- Yes --> K2{対象存在 & 所有者一致?}
+    K2 -- No --> X6
+    K2 -- Yes --> K3{プロフィール取得可?}
+    K3 -- No --> X7[PROFILE_NOT_FOUND]
 
-- Project URL
-- anon public key
-- service_role key
+    K3 --> K4{現行がJP_AUTO_READY?}
+    K4 -- No --> K5{現行がJP_INTENT_LOCKED?}
+    K5 -- No --> X8[状態不正]
+    K5 -- Yes --> K6{final_fr既存?}
+    K6 -- No --> X9[REWRITE_FAILED]
+    K6 -- Yes --> K7[FINAL_FR_READYへ確定]
 
-## 4. ローカル起動
+    K4 -- Yes --> K8[JA意図→FR最終文生成]
+    K8 --> K9{生成結果が空でない?}
+    K9 -- No --> X9
+    K9 -- Yes --> K10[jp_intent/final_fr保存]
+    K10 --> K11[FINAL_FR_READYへ確定
+    （単写真旧APIはJP_INTENT_LOCKEDを経由して即FINAL_FR_READY）]
 
-```bash
-cd /Users/mani/Developer/PHOTO-TEXTE
-cp .env.example .env.local
+    K7 --> L[差分表示 API]
+    K11 --> L
+    L --> L1{final_fr存在?}
+    L1 -- No --> X10[FINAL_TEXT_REQUIRED]
+    L1 -- Yes --> L2[diff計算 + CEFR未知語ハイライト]
+
+    I --> M[メモ API]
+    M --> M1[手動メモ CRUD]
+    M --> M2[自動メモ生成]
+    M2 --> M3{レート制限内?}
+    M3 -- No --> X1
+    M3 -- Yes --> M4{final_frが1件以上ある?}
+    M4 -- No --> M5[suggestions=[]]
+    M4 -- Yes --> M6[未知語抽出 + 学習メモ生成]
+
+    I --> N[PPTX出力 API]
+    N --> N1{レート制限内?}
+    N1 -- No --> X1
+    N1 -- Yes --> N2[runExportWorkflow]
+
+    N2 --> N3{複数写真モード?}
+    N3 -- Yes --> N4{全photoで jp_auto/jp_intent/final_fr あり?}
+    N4 -- No --> X11[ENTRY_NOT_READY]
+    N4 -- Yes --> N5{全photo statusが FINAL_FR_READY or EXPORTED ?}
+    N5 -- No --> X12[ENTRY_STATUS]
+    N5 -- Yes --> N8[assets解決・署名URL取得・画像読込]
+
+    N3 -- No --> N6{entryに jp_auto/jp_intent/final_fr/photo_asset_id あり?}
+    N6 -- No --> X11
+    N6 -- Yes --> N7{entry statusが FINAL_FR_READY or EXPORTED ?}
+    N7 -- No --> X12
+    N7 -- Yes --> N8
+
+    N8 --> N9{include_memos=true ?}
+    N9 -- Yes --> N10[SELF_NOTEのみ抽出]
+    N9 -- No --> N11[学習メモなし]
+    N10 --> N12[PPTX生成]
+    N11 --> N12
+
+    N12 --> N13[exportsバケットへ保存 + token_hash登録]
+    N13 --> N14[状態更新:
+    複数写真はFINAL_FR_READYのみEXPORTEDへ / 単写真はentryをEXPORTEDへ]
+    N14 --> O[トークン付きDL URL返却]
+
+    O --> P[/api/exports/:token/download]
+    P --> P1{token_hash一致?}
+    P1 -- No --> X13[EXPORT_NOT_FOUND]
+    P1 -- Yes --> P2{有効期限内?}
+    P2 -- No --> X14[EXPORT_EXPIRED]
+    P2 -- Yes --> P3[PPTXダウンロード返却]
+
+    Q[Vercel Cron: /api/internal/supabase-keepalive] --> Q1{Bearer CRON_SECRET一致?}
+    Q1 -- No --> X15[401 UNAUTHORIZED]
+    Q1 -- Yes --> Q2[user_profilesをhead select]
+    Q2 --> Q3[ok:true返却]
 ```
 
-`APP_MASTER_KEY_B64` は以下で生成:
+---
 
-```bash
-openssl rand -base64 32
-```
+## ステータスマシン（業務状態）
 
-`.env.local` を設定:
+- 共通状態: `DRAFT_FR → JP_AUTO_READY → JP_INTENT_LOCKED → FINAL_FR_READY → EXPORTED`
+- 下書き編集可: `DRAFT_FR`, `JP_AUTO_READY` のみ
+- リライト可: `JP_INTENT_LOCKED` のみ（`/rewrite` ワークフロー）
+- エクスポート可:
+  - 複数写真: すべての写真が `FINAL_FR_READY` または `EXPORTED`
+  - 単写真: entry が `FINAL_FR_READY` または `EXPORTED`
+
+---
+
+## 最小セットアップ
+
+### 1) 環境変数
+
+`.env.local` を作成し設定:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
@@ -65,87 +177,35 @@ PHOTO_BUCKET=photos
 EXPORT_BUCKET=exports
 ```
 
-起動:
+`APP_MASTER_KEY_B64` 生成:
+
+```bash
+openssl rand -base64 32
+```
+
+### 2) Supabase
+
+- プロジェクト作成
+- SQL Editor でマイグレーション適用: `supabase/migrations/202602050001_init_photo_texte.sql`
+
+### 3) 起動
 
 ```bash
 npm install
 npm run dev
 ```
 
-## 5. Vercelデプロイ（初めて向け）
-
-### 5-1. GitHubにpush
-
-このプロジェクトをGitHubにpush。
-
-### 5-2. VercelでImport
-
-1. Vercel Dashboard -> `Add New...` -> `Project`
-2. GitHubリポジトリを選択
-3. Framework Preset は `Next.js` のまま
-
-### 5-3. 環境変数を登録
-
-`Project Settings -> Environment Variables` に以下を登録:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `CRON_SECRET`
-- `APP_MASTER_KEY_B64`
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `PHOTO_BUCKET`
-- `EXPORT_BUCKET`
-
-### 5-4. デプロイ
-
-`Deploy` を押す。
-
-## 6. Supabase側で本番URLを反映
-
-Vercelの本番URLが出たら、Supabaseで設定:
-
-1. `Authentication -> URL Configuration`
-2. `Site URL` を本番URLに設定
-3. `Redirect URLs` に本番URL（必要なら `http://localhost:3000` も）を追加
-
-## 7. メール確認テンプレート（任意）
-
-`Authentication -> Email Templates -> Confirm signup` で日本語テンプレートに変更可能。
-
-## 8. UI/UX方針
-
-- Apple HIG寄りのフラットUI
-- テーマ色を統一（Primary: `#0A84FF`）
-- 左: 進捗タイムライン / 右: 作業カード
-- ロック後編集不可を明示
-
-## 9. Supabase自動pause回避（keepalive）
-
-このリポジトリには `vercel.json` のCron設定が含まれており、毎日 `03:00 UTC` に  
-`/api/internal/supabase-keepalive` を呼び出します。
-
-このAPIは `CRON_SECRET` を使って保護されています。  
-Vercel Cron は `Authorization: Bearer <CRON_SECRET>` を自動で付けるため、外部からは実行できません。
-
-初回セットアップ:
-
-1. `Project Settings -> Environment Variables` に `CRON_SECRET` を登録
-2. `Deployments` で再デプロイ
-3. 必要なら手動確認:
-   `curl -H "Authorization: Bearer $CRON_SECRET" https://<your-domain>/api/internal/supabase-keepalive`
-
-## 10. テスト
+### 4) テスト
 
 ```bash
 npm test
 ```
 
-カバー:
+---
 
-- `JP_INTENT_LOCKED` 後に本文更新拒否
-- diffが非破壊
-- exportにemail/nameが含まれない
-- EXIF除去
-- RLSポリシーの存在確認
+## デプロイ要点（Vercel）
+
+- GitHub連携で `Next.js` として Import
+- 上記環境変数を Vercel Project に登録
+- Supabase `Authentication > URL Configuration` に本番URLを設定
+- `vercel.json` の Cron で毎日 keepalive 実行（`CRON_SECRET` 必須）
