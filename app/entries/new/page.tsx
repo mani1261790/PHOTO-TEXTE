@@ -11,6 +11,8 @@ const NEW_ENTRY_DRAFT_STORAGE_KEY = "photo-texte:new-entry-draft:v1";
 const NEW_ENTRY_DRAFT_DB = "photo-texte-drafts";
 const NEW_ENTRY_DRAFT_STORE = "new-entry";
 const NEW_ENTRY_DRAFT_ID = "current";
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2560;
 
 type PhotoDraft = {
   file: File;
@@ -41,6 +43,63 @@ type IndexedNewEntryDraft = {
 
 function photoDraftKey(file: File): string {
   return `${file.name}::${file.size}::${file.lastModified}`;
+}
+
+function asJpegFileName(name: string): string {
+  return name.replace(/\.[^.]+$/, "") + ".jpg";
+}
+
+async function loadImageElement(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("IMAGE_DECODE_FAILED"));
+    };
+    img.src = url;
+  });
+}
+
+async function maybeDownscalePhoto(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size <= MAX_UPLOAD_BYTES) {
+    return file;
+  }
+
+  const image = await loadImageElement(file);
+  const scale = Math.min(
+    1,
+    MAX_IMAGE_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight),
+  );
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return file;
+  context.drawImage(image, 0, 0, width, height);
+
+  const tryQualities = [0.88, 0.8, 0.72, 0.64, 0.56];
+  for (const quality of tryQualities) {
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", quality);
+    });
+    if (!blob) continue;
+    if (blob.size <= MAX_UPLOAD_BYTES) {
+      return new File([blob], asJpegFileName(file.name), {
+        type: "image/jpeg",
+        lastModified: file.lastModified,
+      });
+    }
+  }
+
+  return file;
 }
 
 function openDraftDb(): Promise<IDBDatabase> {
@@ -234,7 +293,7 @@ export default function NewEntryPage() {
     return () => clearTimeout(timer);
   }, [titleFr, photos]);
 
-  function onPickFiles(files: FileList | null) {
+  async function onPickFiles(files: FileList | null) {
     if (!files) return;
 
     setError(null);
@@ -248,11 +307,19 @@ export default function NewEntryPage() {
       setError(t("写真は最大10枚までです。", "Maximum 10 photos."));
     }
 
-    const next: PhotoDraft[] = toAdd.map((file) => ({
-      file,
-      previewUrl: URL.createObjectURL(file),
-      draftFr: savedDraftByPhotoKey[photoDraftKey(file)] ?? "",
-    }));
+    const next: PhotoDraft[] = [];
+    for (const originalFile of toAdd) {
+      const file = await maybeDownscalePhoto(originalFile).catch(() => originalFile);
+      const draftFr =
+        savedDraftByPhotoKey[photoDraftKey(originalFile)] ??
+        savedDraftByPhotoKey[photoDraftKey(file)] ??
+        "";
+      next.push({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        draftFr,
+      });
+    }
 
     setPhotos((prev) => [...prev, ...next]);
     // Focus the first newly added photo for drafting.
@@ -394,7 +461,9 @@ export default function NewEntryPage() {
               type="file"
               accept="image/*"
               multiple
-              onChange={(e) => onPickFiles(e.target.files)}
+              onChange={(e) => {
+                void onPickFiles(e.target.files);
+              }}
             />
             <div className="field-meta">
               {t("選択枚数:", "Nombre sélectionné :")} {photos.length}
