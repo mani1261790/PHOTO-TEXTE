@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 
 import { badRequest, conflict } from "@/lib/api/errors";
 import { issueExportToken } from "@/lib/exports/token";
+import { buildLearningHighlights } from "@/lib/learning/highlight";
 import { generatePhotoTextePptx } from "@/lib/pptx/generator";
 import { exportBucket, photoBucket } from "@/lib/storage/buckets";
 
@@ -71,7 +72,7 @@ export async function runExportWorkflow(params: {
 
   const { data: profile, error: profileError } = await client
     .from("user_profiles")
-    .select("display_name")
+    .select("display_name,cefr_level")
     .eq("id", userId)
     .single();
 
@@ -186,6 +187,11 @@ export async function runExportWorkflow(params: {
         : undefined;
 
       return {
+        ...buildLearningHighlights(
+          p.draft_fr ?? "",
+          p.final_fr ?? "",
+          profile?.cefr_level ?? "A2",
+        ),
         position: p.position ?? 1,
         draftFr: p.draft_fr ?? "",
         jpAuto: p.jp_auto ?? "",
