@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { KeyboardEvent, PointerEvent, useEffect, useMemo, useState } from 'react';
 
 import { DiffToken } from '@/lib/diff/read-only';
 import { useLanguage } from '@/components/LanguageProvider';
@@ -38,6 +38,10 @@ export function DiffReadOnly({
   const { language } = useLanguage();
   const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const [wordClassByKey, setWordClassByKey] = useState<Record<string, string>>({});
+  const tokenSignature = useMemo(
+    () => tokens.map((token) => `${token.kind}:${token.value}`).join('\u241f'),
+    [tokens]
+  );
 
   const knownSet = new Set(knownWords.map(normalizeWord));
   const unknownSet = new Set(unknownWords.map(normalizeWord));
@@ -45,13 +49,42 @@ export function DiffReadOnly({
 
   useEffect(() => {
     setWordClassByKey({});
-  }, [tokens]);
+  }, [tokenSignature]);
 
   function cycleWordClass(current: string): string {
     if (!current) return 'diff-hl-grammar';
     if (current === 'diff-hl-grammar') return 'diff-hl-known';
     if (current === 'diff-hl-known') return 'diff-hl-unknown';
     return '';
+  }
+
+  function toggleWordClass(overrideKey: string, defaultClassName: string) {
+    setWordClassByKey((prev) => {
+      const currentClassName = prev[overrideKey] ?? defaultClassName;
+      return {
+        ...prev,
+        [overrideKey]: cycleWordClass(currentClassName),
+      };
+    });
+  }
+
+  function handleWordPointerDown(
+    event: PointerEvent<HTMLButtonElement>,
+    overrideKey: string,
+    defaultClassName: string
+  ) {
+    event.preventDefault();
+    toggleWordClass(overrideKey, defaultClassName);
+  }
+
+  function handleWordKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    overrideKey: string,
+    defaultClassName: string
+  ) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleWordClass(overrideKey, defaultClassName);
   }
 
   return (
@@ -96,12 +129,8 @@ export function DiffReadOnly({
                   key={`${idx}-${partIdx}`}
                   type="button"
                   className={`diff-word-btn${activeClassName ? ` ${activeClassName}` : ''}`}
-                  onClick={() => {
-                    setWordClassByKey((prev) => ({
-                      ...prev,
-                      [overrideKey]: cycleWordClass(activeClassName),
-                    }));
-                  }}
+                  onPointerDown={(event) => handleWordPointerDown(event, overrideKey, className)}
+                  onKeyDown={(event) => handleWordKeyDown(event, overrideKey, className)}
                 >
                   {part}
                 </button>
