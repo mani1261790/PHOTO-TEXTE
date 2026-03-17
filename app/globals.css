@@ -582,6 +582,14 @@ button[disabled] {
     text-decoration: line-through;
 }
 
+.diff-add-muted {
+    background: transparent;
+}
+
+.diff-remove-muted {
+    background: transparent;
+}
+
 .diff-block {
     font-family: inherit;
     white-space: pre-wrap;
@@ -1105,6 +1113,17 @@ button[disabled] {
 .diff-hl-unknown {
     background: #b2ebf2;
     border-radius: 4px;
+}
+
+.diff-word-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
 }
 
 .diff-legend {
