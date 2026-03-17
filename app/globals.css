@@ -1129,7 +1129,10 @@ button[disabled] {
     vertical-align: baseline;
     border-radius: 4px;
     touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
     cursor: pointer;
+    transition: background-color 120ms ease;
 }
 
 .diff-word-btn:hover {

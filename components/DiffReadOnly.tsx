@@ -1,6 +1,6 @@
 'use client';
 
-import { KeyboardEvent, PointerEvent, useEffect, useMemo, useState } from 'react';
+import { KeyboardEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DiffToken } from '@/lib/diff/read-only';
 import { useLanguage } from '@/components/LanguageProvider';
@@ -14,6 +14,14 @@ type Props = {
   interactiveWordHighlight?: boolean;
   showDiffColors?: boolean;
 };
+
+type HighlightClassName = 'diff-hl-grammar' | 'diff-hl-known' | 'diff-hl-unknown';
+
+const HIGHLIGHT_CLASSES: HighlightClassName[] = [
+  'diff-hl-grammar',
+  'diff-hl-known',
+  'diff-hl-unknown',
+];
 
 function normalizeWord(token: string): string {
   return token
@@ -38,6 +46,11 @@ export function DiffReadOnly({
   const { language } = useLanguage();
   const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const [wordClassByKey, setWordClassByKey] = useState<Record<string, string>>({});
+  const dragStateRef = useRef<{
+    pointerId: number;
+    className: HighlightClassName;
+    appliedKeys: Set<string>;
+  } | null>(null);
   const tokenSignature = useMemo(
     () => tokens.map((token) => `${token.kind}:${token.value}`).join('\u241f'),
     [tokens]
@@ -51,40 +64,65 @@ export function DiffReadOnly({
     setWordClassByKey({});
   }, [tokenSignature]);
 
-  function cycleWordClass(current: string): string {
-    if (!current) return 'diff-hl-grammar';
-    if (current === 'diff-hl-grammar') return 'diff-hl-known';
-    if (current === 'diff-hl-known') return 'diff-hl-unknown';
-    return '';
+  function cycleWordClass(current: string): HighlightClassName {
+    const currentIndex = HIGHLIGHT_CLASSES.indexOf(current as HighlightClassName);
+    if (currentIndex === -1) return HIGHLIGHT_CLASSES[0];
+    return HIGHLIGHT_CLASSES[(currentIndex + 1) % HIGHLIGHT_CLASSES.length];
   }
 
-  function toggleWordClass(overrideKey: string, defaultClassName: string) {
+  function setWordClass(overrideKey: string, nextClassName: HighlightClassName) {
     setWordClassByKey((prev) => {
-      const currentClassName = prev[overrideKey] ?? defaultClassName;
       return {
         ...prev,
-        [overrideKey]: cycleWordClass(currentClassName),
+        [overrideKey]: nextClassName,
       };
     });
+  }
+
+  function getNextClassName(currentClassName: string) {
+    return cycleWordClass(currentClassName);
   }
 
   function handleWordPointerDown(
     event: PointerEvent<HTMLButtonElement>,
     overrideKey: string,
-    defaultClassName: string
+    currentClassName: string
   ) {
     event.preventDefault();
-    toggleWordClass(overrideKey, defaultClassName);
+    const nextClassName = getNextClassName(currentClassName);
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      className: nextClassName,
+      appliedKeys: new Set([overrideKey]),
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setWordClass(overrideKey, nextClassName);
+  }
+
+  function handleWordPointerEnter(
+    event: PointerEvent<HTMLButtonElement>,
+    overrideKey: string
+  ) {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    if (dragState.appliedKeys.has(overrideKey)) return;
+    dragState.appliedKeys.add(overrideKey);
+    setWordClass(overrideKey, dragState.className);
+  }
+
+  function clearDragState(pointerId: number) {
+    if (dragStateRef.current?.pointerId !== pointerId) return;
+    dragStateRef.current = null;
   }
 
   function handleWordKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,
     overrideKey: string,
-    defaultClassName: string
+    currentClassName: string
   ) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    toggleWordClass(overrideKey, defaultClassName);
+    setWordClass(overrideKey, getNextClassName(currentClassName));
   }
 
   return (
@@ -92,7 +130,10 @@ export function DiffReadOnly({
       <h3>{t('差分表示（読み取り専用）', 'Diff (lecture seule)')}</h3>
       <p className="badge">
         {interactiveWordHighlight
-          ? t('単語をタップして色を変更', 'Touchez un mot pour changer sa couleur')
+          ? t(
+              '単語をタップで色切替。押したままなぞると複数語をまとめて変更。',
+              'Touchez un mot pour changer sa couleur. Glissez pour appliquer la meme couleur a plusieurs mots.'
+            )
           : t('操作不可', 'Non modifiable')}
       </p>
       <pre className="diff-block">
@@ -129,8 +170,12 @@ export function DiffReadOnly({
                   key={`${idx}-${partIdx}`}
                   type="button"
                   className={`diff-word-btn${activeClassName ? ` ${activeClassName}` : ''}`}
-                  onPointerDown={(event) => handleWordPointerDown(event, overrideKey, className)}
-                  onKeyDown={(event) => handleWordKeyDown(event, overrideKey, className)}
+                  onPointerDown={(event) => handleWordPointerDown(event, overrideKey, activeClassName)}
+                  onPointerEnter={(event) => handleWordPointerEnter(event, overrideKey)}
+                  onPointerUp={(event) => clearDragState(event.pointerId)}
+                  onPointerCancel={(event) => clearDragState(event.pointerId)}
+                  onLostPointerCapture={(event) => clearDragState(event.pointerId)}
+                  onKeyDown={(event) => handleWordKeyDown(event, overrideKey, activeClassName)}
                 >
                   {part}
                 </button>
