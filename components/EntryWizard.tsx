@@ -134,6 +134,8 @@ export function EntryWizard({ id }: { id: string }) {
   const [memoDraftTouched, setMemoDraftTouched] = useState(false);
   const [memoAutoLoading, setMemoAutoLoading] = useState(false);
   const [memoSaving, setMemoSaving] = useState(false);
+  const [memoPendingSave, setMemoPendingSave] = useState(false);
+  const [memoSavedAt, setMemoSavedAt] = useState<number | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const memoAutoRequestedRef = useRef<string | null>(null);
   const [diffLoadingId, setDiffLoadingId] = useState<string | null>(null);
@@ -291,6 +293,8 @@ export function EntryWizard({ id }: { id: string }) {
     }
     setMemoDraft("");
     setMemoDraftTouched(false);
+    setMemoPendingSave(false);
+    setMemoSavedAt(null);
     memoAutoRequestedRef.current = null;
     loadAll().catch((err) => setError((err as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -569,6 +573,8 @@ export function EntryWizard({ id }: { id: string }) {
           await apiFetch(`/api/memos/${selfNote.id}`, { method: "DELETE", body: "{}" });
         }
         await loadAll();
+        setMemoPendingSave(false);
+        setMemoSavedAt(Date.now());
         return;
       }
 
@@ -584,6 +590,8 @@ export function EntryWizard({ id }: { id: string }) {
         });
       }
       await loadAll();
+      setMemoPendingSave(false);
+      setMemoSavedAt(Date.now());
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -593,13 +601,13 @@ export function EntryWizard({ id }: { id: string }) {
 
 
   useEffect(() => {
-    if (!entry || !memoDraftTouched) return;
+    if (!entry || !memoDraftTouched || !memoPendingSave) return;
     const timer = setTimeout(() => {
       void saveSelfNote(memoDraft);
     }, 900);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memoDraft, memoDraftTouched, entry?.id]);
+  }, [memoDraft, memoDraftTouched, memoPendingSave, entry?.id]);
 
   async function exportPptx() {
     setBusy(true);
@@ -725,7 +733,7 @@ export function EntryWizard({ id }: { id: string }) {
               <strong>{progress}%</strong>
             </div>
             <div className="metric">
-              <span>{t("メモ(SELF_NOTE)", "Notes (SELF_NOTE)")}</span>
+              <span>{t("メモ", "Notes")}</span>
               <strong>
                 {memos.filter((m) => m.memo_type === "SELF_NOTE").length}
               </strong>
@@ -977,6 +985,8 @@ export function EntryWizard({ id }: { id: string }) {
                       unknownWords={activeLearningHighlights.unknownWords}
                       grammarWords={activeLearningHighlights.grammarWords}
                       showLegend
+                      interactiveWordHighlight
+                      showDiffColors={false}
                     />
                   ) : (
                     <div className="card">
@@ -1002,7 +1012,7 @@ export function EntryWizard({ id }: { id: string }) {
         )}
 
         <div className="card">
-          <h3>{t("学び（SELF_NOTE）", "Apprentissages (SELF_NOTE)")}</h3>
+          <h3>{t("メモ", "Notes")}</h3>
           <p className="timeline-detail">
             {t(
               "ここに書いた内容は、PPTXの最後のスライドに箇条書きで出力されます。",
@@ -1016,27 +1026,27 @@ export function EntryWizard({ id }: { id: string }) {
             onChange={(e) => {
               setMemoDraft(e.target.value);
               setMemoDraftTouched(true);
+              setMemoPendingSave(true);
             }}
             placeholder={t(
-              "学びを自由に書くと自動保存されます（改行OK）",
-              "Écrivez librement vos apprentissages (sauvegarde auto).",
+              "メモを自由に書くと自動保存されます（改行OK）",
+              "Écrivez librement vos notes (sauvegarde auto).",
             )}
           />
           {memoAutoLoading && !memoDraftTouched && !memoDraft.trim() ? (
             <p className="badge">{t("メモを自動生成中…", "Génération des notes…")}</p>
           ) : null}
           {memoSaving ? <p className="badge">{t("自動保存中…", "Sauvegarde automatique…")}</p> : null}
+          {!memoSaving && !memoPendingSave && memoSavedAt ? (
+            <p className="badge">{t("自動保存済み", "Sauvegarde auto terminée")}</p>
+          ) : null}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
-              onClick={() => {
-                setMemoDraft("");
-                setMemoDraftTouched(true);
-                void saveSelfNote("");
-              }}
-              disabled={memoSaving || !memoDraft.trim()}
+              onClick={() => void saveSelfNote(memoDraft)}
+              disabled={memoSaving || !memoPendingSave}
             >
-              {t("学びを削除", "Supprimer l'apprentissage")}
+              {t("保存", "Enregistrer")}
             </button>
           </div>
         </div>
