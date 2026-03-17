@@ -214,9 +214,9 @@ export function DiffReadOnly({
 
       {showLegend ? (
         <div className="diff-legend">
-          <p><span className="diff-hl-grammar">{t('訂正が入った語だけ最初は黄色', 'Seuls les mots corriges commencent en jaune')}</span></p>
-          <p><span className="diff-hl-known">{t('ピンクは手動で選ぶ色', 'Le rose est une couleur choisie manuellement')}</span></p>
-          <p><span className="diff-hl-unknown">{t('青も手動で選ぶ色', 'Le bleu est aussi une couleur choisie manuellement')}</span></p>
+          <p><span className="diff-hl-grammar">{t('文法は黄色でハイライト', 'Je souligne la grammaire en jaune')}</span></p>
+          <p><span className="diff-hl-known">{t('知っている語はピンクでハイライト', 'Je souligne les mots que je connais en rose')}</span></p>
+          <p><span className="diff-hl-unknown">{t('覚えたい語は青でハイライト', 'Je souligne les mots utiles, que je ne connais pas, en bleu')}</span></p>
         </div>
       ) : null}
     </div>
