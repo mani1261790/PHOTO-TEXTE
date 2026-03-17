@@ -1117,13 +1117,23 @@ button[disabled] {
 
 .diff-word-btn {
     appearance: none;
+    display: inline;
+    width: auto;
     border: none;
     background: transparent;
     color: inherit;
     font: inherit;
     margin: 0;
     padding: 0;
+    line-height: inherit;
+    vertical-align: baseline;
+    border-radius: 0;
+    touch-action: manipulation;
     cursor: pointer;
+}
+
+.diff-word-btn:hover {
+    filter: none;
 }
 
 .diff-legend {
