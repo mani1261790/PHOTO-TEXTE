@@ -1120,20 +1120,32 @@ button[disabled] {
     display: inline;
     width: auto;
     border: none;
-    background: transparent;
+    background-color: transparent;
     color: inherit;
     font: inherit;
     margin: 0;
     padding: 0;
     line-height: inherit;
     vertical-align: baseline;
-    border-radius: 0;
+    border-radius: 4px;
     touch-action: manipulation;
     cursor: pointer;
 }
 
 .diff-word-btn:hover {
     filter: none;
+}
+
+.diff-word-btn.diff-hl-grammar {
+    background-color: #fff59d;
+}
+
+.diff-word-btn.diff-hl-known {
+    background-color: #f8bbd0;
+}
+
+.diff-word-btn.diff-hl-unknown {
+    background-color: #b2ebf2;
 }
 
 .diff-legend {
