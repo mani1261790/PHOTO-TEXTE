@@ -1120,6 +1120,7 @@ button[disabled] {
     display: inline;
     width: auto;
     border: none;
+    background: none;
     background-color: transparent;
     color: inherit;
     font: inherit;
