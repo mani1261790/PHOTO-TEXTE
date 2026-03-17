@@ -8,7 +8,9 @@ import { apiFetch } from "@/lib/api/fetcher";
 import { getAccessToken } from "@/lib/auth/token-store";
 import { useLanguage } from "@/components/LanguageProvider";
 import { DiffReadOnly } from "@/components/DiffReadOnly";
+import { buildLearningHighlights } from "@/lib/learning/highlight";
 import { DiffToken } from "@/lib/diff/read-only";
+import { CEFRLevel } from "@/lib/types";
 
 type EntryStatus =
   | "DRAFT_FR"
@@ -50,6 +52,10 @@ type Memo = {
   id: string;
   memo_type: "TEACHER_FEEDBACK" | "SELF_NOTE";
   content: string;
+};
+
+type Profile = {
+  cefr_level: CEFRLevel;
 };
 
 type PhotoDiff = {
@@ -102,21 +108,7 @@ function isExportReadyForAllPhotos(photos: EntryPhoto[]): boolean {
   );
 }
 
-function normalizeMemoLinesToBullets(memos: Memo[]): string[] {
-  const lines: string[] = [];
-  for (const m of memos) {
-    if (m.memo_type !== "SELF_NOTE") continue;
-    const raw = (m.content ?? "").trim();
-    if (!raw) continue;
-    for (const part of raw.split(/\r?\n/)) {
-      const s = part.trim();
-      if (!s) continue;
-      lines.push(s.replace(/^[-*•\u2022]+\s*/, ""));
-    }
-  }
-  // Keep it reasonable (PPTX slide readability)
-  return lines.slice(0, 18);
-}
+
 
 export function EntryWizard({ id }: { id: string }) {
   const router = useRouter();
@@ -141,6 +133,8 @@ export function EntryWizard({ id }: { id: string }) {
   const [memoDraft, setMemoDraft] = useState("");
   const [memoDraftTouched, setMemoDraftTouched] = useState(false);
   const [memoAutoLoading, setMemoAutoLoading] = useState(false);
+  const [memoSaving, setMemoSaving] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const memoAutoRequestedRef = useRef<string | null>(null);
   const [diffLoadingId, setDiffLoadingId] = useState<string | null>(null);
   const [diffByPhotoId, setDiffByPhotoId] = useState<
@@ -176,6 +170,15 @@ export function EntryWizard({ id }: { id: string }) {
     () => isExportReadyForAllPhotos(photos),
     [photos],
   );
+
+  const activeLearningHighlights = useMemo(() => {
+    if (!activePhoto?.final_fr) return { knownWords: [], unknownWords: [], grammarWords: [] };
+    return buildLearningHighlights(
+      activePhoto.draft_fr ?? "",
+      activePhoto.final_fr ?? "",
+      profile?.cefr_level ?? "A2",
+    );
+  }, [activePhoto?.id, activePhoto?.draft_fr, activePhoto?.final_fr, profile?.cefr_level]);
 
   const progress = useMemo(() => {
     if (!photos.length) return 0;
@@ -243,16 +246,12 @@ export function EntryWizard({ id }: { id: string }) {
   );
 
   async function loadAll() {
-    const [entryData, photosData] = await Promise.all([
+    const [entryData, photosData, memoData, profileData] = await Promise.all([
       apiFetch<Entry>(`/api/entries/${id}`),
-      apiFetch<{ entry_id: string; photos: EntryPhoto[] }>(
-        `/api/entries/${id}/photos`,
-      ),
+      apiFetch<{ entry_id: string; photos: EntryPhoto[] }>(`/api/entries/${id}/photos`),
+      apiFetch<{ memos: Memo[] }>(`/api/entries/${id}/memos`).catch(() => ({ memos: [] })),
+      apiFetch<Profile>(`/api/me`).catch(() => ({ cefr_level: "A2" as CEFRLevel })),
     ]);
-
-    const memoData = await apiFetch<{ memos: Memo[] }>(`/api/entries/${id}/memos`).catch(
-      () => ({ memos: [] }),
-    );
 
     setEntry(entryData);
 
@@ -262,6 +261,9 @@ export function EntryWizard({ id }: { id: string }) {
     setPhotos(list);
 
     setMemos(memoData.memos);
+    setProfile({ cefr_level: profileData.cefr_level ?? "A2" });
+    const selfNote = (memoData.memos ?? []).find((m) => m.memo_type === "SELF_NOTE");
+    if (!memoDraftTouched) setMemoDraft(selfNote?.content ?? "");
 
     // Initialize active photo if not set.
     setActivePhotoId((current) => {
@@ -555,22 +557,49 @@ export function EntryWizard({ id }: { id: string }) {
     }
   }
 
-  async function createMemo(content: string) {
-    if (!content.trim()) return;
-    setBusy(true);
+  async function saveSelfNote(content: string) {
+    const trimmed = content.trim();
+    const selfNote = memos.find((m) => m.memo_type === "SELF_NOTE");
+
+    setMemoSaving(true);
     setError(null);
     try {
-      await apiFetch(`/api/entries/${id}/memos`, {
-        method: "POST",
-        body: JSON.stringify({ memo_type: "SELF_NOTE", content }),
-      });
+      if (!trimmed) {
+        if (selfNote) {
+          await apiFetch(`/api/memos/${selfNote.id}`, { method: "DELETE", body: "{}" });
+        }
+        await loadAll();
+        return;
+      }
+
+      if (selfNote) {
+        await apiFetch(`/api/memos/${selfNote.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ content: trimmed }),
+        });
+      } else {
+        await apiFetch(`/api/entries/${id}/memos`, {
+          method: "POST",
+          body: JSON.stringify({ memo_type: "SELF_NOTE", content: trimmed }),
+        });
+      }
       await loadAll();
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      setMemoSaving(false);
     }
   }
+
+
+  useEffect(() => {
+    if (!entry || !memoDraftTouched) return;
+    const timer = setTimeout(() => {
+      void saveSelfNote(memoDraft);
+    }, 900);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memoDraft, memoDraftTouched, entry?.id]);
 
   async function exportPptx() {
     setBusy(true);
@@ -944,6 +973,10 @@ export function EntryWizard({ id }: { id: string }) {
                   ) : diffByPhotoId[activePhoto.id]?.tokens ? (
                     <DiffReadOnly
                       tokens={diffByPhotoId[activePhoto.id].tokens}
+                      knownWords={activeLearningHighlights.knownWords}
+                      unknownWords={activeLearningHighlights.unknownWords}
+                      grammarWords={activeLearningHighlights.grammarWords}
+                      showLegend
                     />
                   ) : (
                     <div className="card">
@@ -978,46 +1011,34 @@ export function EntryWizard({ id }: { id: string }) {
           </p>
 
           <textarea
-            rows={4}
+            rows={6}
             value={memoDraft}
             onChange={(e) => {
               setMemoDraft(e.target.value);
               setMemoDraftTouched(true);
             }}
             placeholder={t(
-              "新たな単語・文法・気づきなど（改行で複数OK）",
-              "Nouveaux mots/grammaire/observations (multi-lignes OK)",
+              "学びを自由に書くと自動保存されます（改行OK）",
+              "Écrivez librement vos apprentissages (sauvegarde auto).",
             )}
           />
           {memoAutoLoading && !memoDraftTouched && !memoDraft.trim() ? (
-            <p className="badge">
-              {t("メモを自動生成中…", "Génération des notes…")}
-            </p>
+            <p className="badge">{t("メモを自動生成中…", "Génération des notes…")}</p>
           ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              const value = memoDraft;
-              setMemoDraft("");
-              void createMemo(value);
-            }}
-            disabled={busy || !memoDraft.trim()}
-          >
-            {t("メモを追加", "Ajouter une note")}
-          </button>
-
-          {memos.filter((m) => m.memo_type === "SELF_NOTE").length ? (
-            <>
-              <h4 style={{ marginBottom: 6 }}>{t("登録済み", "Enregistré")}</h4>
-              {normalizeMemoLinesToBullets(memos).map((line, idx) => (
-                <p key={`${idx}-${line}`}>• {line}</p>
-              ))}
-            </>
-          ) : (
-            <p className="timeline-detail">
-              {t("SELF_NOTEはまだありません。", "Aucune note pour l'instant.")}
-            </p>
-          )}
+          {memoSaving ? <p className="badge">{t("自動保存中…", "Sauvegarde automatique…")}</p> : null}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setMemoDraft("");
+                setMemoDraftTouched(true);
+                void saveSelfNote("");
+              }}
+              disabled={memoSaving || !memoDraft.trim()}
+            >
+              {t("学びを削除", "Supprimer l'apprentissage")}
+            </button>
+          </div>
         </div>
 
         <div
