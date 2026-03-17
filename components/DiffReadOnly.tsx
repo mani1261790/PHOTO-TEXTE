@@ -15,9 +15,10 @@ type Props = {
   showDiffColors?: boolean;
 };
 
-type HighlightClassName = 'diff-hl-grammar' | 'diff-hl-known' | 'diff-hl-unknown';
+type HighlightClassName = '' | 'diff-hl-grammar' | 'diff-hl-known' | 'diff-hl-unknown';
 
 const HIGHLIGHT_CLASSES: HighlightClassName[] = [
+  '',
   'diff-hl-grammar',
   'diff-hl-known',
   'diff-hl-unknown',
@@ -56,8 +57,6 @@ export function DiffReadOnly({
     [tokens]
   );
 
-  const knownSet = new Set(knownWords.map(normalizeWord));
-  const unknownSet = new Set(unknownWords.map(normalizeWord));
   const grammarSet = new Set(grammarWords.map(normalizeWord));
 
   useEffect(() => {
@@ -65,8 +64,7 @@ export function DiffReadOnly({
   }, [tokenSignature]);
 
   function cycleWordClass(current: string): HighlightClassName {
-    const currentIndex = HIGHLIGHT_CLASSES.indexOf(current as HighlightClassName);
-    if (currentIndex === -1) return HIGHLIGHT_CLASSES[0];
+    const currentIndex = HIGHLIGHT_CLASSES.indexOf(normalizeHighlightClass(current));
     return HIGHLIGHT_CLASSES[(currentIndex + 1) % HIGHLIGHT_CLASSES.length];
   }
 
@@ -81,6 +79,12 @@ export function DiffReadOnly({
 
   function getNextClassName(currentClassName: string) {
     return cycleWordClass(currentClassName);
+  }
+
+  function normalizeHighlightClass(value: string): HighlightClassName {
+    return HIGHLIGHT_CLASSES.includes(value as HighlightClassName)
+      ? (value as HighlightClassName)
+      : '';
   }
 
   function handleWordPointerDown(
@@ -131,8 +135,8 @@ export function DiffReadOnly({
       <p className="badge">
         {interactiveWordHighlight
           ? t(
-              '単語をタップで色切替。押したままなぞると複数語をまとめて変更。',
-              'Touchez un mot pour changer sa couleur. Glissez pour appliquer la meme couleur a plusieurs mots.'
+              '訂正語は最初だけ黄色。単語をタップで無色→黄→ピンク→青→無色、押したままなぞると複数語をまとめて変更。',
+              'Les mots corriges commencent en jaune. Touchez pour faire tourner sans couleur -> jaune -> rose -> bleu -> sans couleur. Glissez pour appliquer a plusieurs mots.'
             )
           : t('操作不可', 'Non modifiable')}
       </p>
@@ -155,13 +159,11 @@ export function DiffReadOnly({
 
           return splitPreserveSpaces(token.value).map((part, partIdx) => {
             const key = normalizeWord(part);
-            let className = '';
+            let className: HighlightClassName = '';
             if (key && grammarSet.has(key)) className = 'diff-hl-grammar';
-            else if (key && knownSet.has(key)) className = 'diff-hl-known';
-            else if (key && unknownSet.has(key)) className = 'diff-hl-unknown';
 
             const overrideKey = `${idx}-${partIdx}`;
-            const activeClassName = wordClassByKey[overrideKey] ?? className;
+            const activeClassName = normalizeHighlightClass(wordClassByKey[overrideKey] ?? className);
             const canTap = interactiveWordHighlight && Boolean(key);
 
             if (canTap) {
@@ -193,9 +195,9 @@ export function DiffReadOnly({
 
       {showLegend ? (
         <div className="diff-legend">
-          <p><span className="diff-hl-grammar">{t('文法は黄色でハイライト', 'Je souligne la grammaire en jaune')}</span></p>
-          <p><span className="diff-hl-known">{t('知っている語はピンクでハイライト', 'Je souligne les mots que je connais en rose')}</span></p>
-          <p><span className="diff-hl-unknown">{t('覚えたい語は青でハイライト', 'Je souligne les mots utiles, que je ne connais pas, en bleu')}</span></p>
+          <p><span className="diff-hl-grammar">{t('訂正が入った語だけ最初は黄色', 'Seuls les mots corriges commencent en jaune')}</span></p>
+          <p><span className="diff-hl-known">{t('ピンクは手動で選ぶ色', 'Le rose est une couleur choisie manuellement')}</span></p>
+          <p><span className="diff-hl-unknown">{t('青も手動で選ぶ色', 'Le bleu est aussi une couleur choisie manuellement')}</span></p>
         </div>
       ) : null}
     </div>
