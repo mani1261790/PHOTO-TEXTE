@@ -8,6 +8,9 @@ export interface PptxPhotoInput {
   jpAuto: string;
   jpIntent: string;
   finalFr: string;
+  knownWords?: string[];
+  unknownWords?: string[];
+  grammarWords?: string[];
   /**
    * A data URL such as:
    * - data:image/jpeg;base64,...
@@ -40,6 +43,10 @@ const layout = {
   rightCol: { x: 6.8, y: 1.2, w: 5.9, h: 5.8 },
   rightTop: { x: 6.8, y: 1.2, w: 5.9, h: 2.75 },
   rightBottom: { x: 6.8, y: 4.25, w: 5.9, h: 2.75 },
+
+  // étape 5 slide
+  etape5Text: { x: 0.6, y: 1.2, w: 12.1, h: 4.9 },
+  etape5Legend: { x: 0.8, y: 6.2, w: 11.8, h: 1.0 },
 
   // Learning slide
   learningHeader: { x: 0.6, y: 0.25, w: 12.2, h: 0.8 },
@@ -356,6 +363,96 @@ function addEtape4FinalSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
   addTextPanel(s, layout.rightCol, "Texte final (FR)", photo.finalFr, 1600);
 }
 
+
+
+function tokenizeWithWhitespace(text: string): string[] {
+  return text.split(/(\s+)/g).filter((x) => x.length > 0);
+}
+
+function normalizeWord(token: string): string {
+  return token
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .replace(/^[^a-zàâçéèêëîïôûùüÿñæœ']+|[^a-zàâçéèêëîïôûùüÿñæœ']+$/gi, "");
+}
+
+function buildHighlightedRuns(photo: PptxPhotoInput): PptxGenJS.TextProps[] {
+  const known = new Set((photo.knownWords ?? []).map((w) => normalizeWord(w)));
+  const unknown = new Set((photo.unknownWords ?? []).map((w) => normalizeWord(w)));
+  const grammar = new Set((photo.grammarWords ?? []).map((w) => normalizeWord(w)));
+
+  return tokenizeWithWhitespace(photo.finalFr ?? "").map((token) => {
+    const key = normalizeWord(token);
+    let highlight: string | undefined;
+
+    if (key && grammar.has(key)) highlight = "FFF59D";
+    else if (key && known.has(key)) highlight = "F8BBD0";
+    else if (key && unknown.has(key)) highlight = "B2EBF2";
+
+    return {
+      text: token,
+      options: {
+        bold: false,
+        highlight,
+      },
+    };
+  });
+}
+
+function addEtape5ComparisonSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
+  const s = pptx.addSlide();
+  s.background = { color: "F8FAFC" };
+  addSlideTitle(s, `étape 5. Comparaison (photo ${photo.position})`);
+
+  s.addText(buildHighlightedRuns(photo), {
+    ...layout.etape5Text,
+    fontFace: "Aptos",
+    fontSize: 19,
+    color: "0F172A",
+    valign: "top",
+  });
+
+  s.addShape("roundRect", {
+    x: 0.6,
+    y: 6.0,
+    w: 12.1,
+    h: 1.2,
+    line: { color: "CBD5E1", pt: 1 },
+    fill: { color: "FFFFFF" },
+  });
+
+  s.addText("Je souligne la grammaire en jaune", {
+    x: layout.etape5Legend.x,
+    y: layout.etape5Legend.y,
+    w: layout.etape5Legend.w,
+    h: 0.28,
+    fontFace: "Aptos",
+    fontSize: 14,
+    color: "0F172A",
+    highlight: "FFF59D",
+  });
+  s.addText("Je souligne les mots que je connais en rose", {
+    x: layout.etape5Legend.x,
+    y: layout.etape5Legend.y + 0.32,
+    w: layout.etape5Legend.w,
+    h: 0.28,
+    fontFace: "Aptos",
+    fontSize: 14,
+    color: "0F172A",
+    highlight: "F8BBD0",
+  });
+  s.addText("Je souligne les mots utiles, que je ne connais pas, en bleu", {
+    x: layout.etape5Legend.x,
+    y: layout.etape5Legend.y + 0.64,
+    w: layout.etape5Legend.w,
+    h: 0.28,
+    fontFace: "Aptos",
+    fontSize: 14,
+    color: "0F172A",
+    highlight: "B2EBF2",
+  });
+}
+
 function addLearningSlide(pptx: PptxGenJS, titleFr: string, bullets: string[]) {
   const s = pptx.addSlide();
   s.background = { color: "F8FAFC" };
@@ -402,6 +499,7 @@ function addLearningSlide(pptx: PptxGenJS, titleFr: string, bullets: string[]) {
  * -> For each photo 1..N: étape2 (JP auto + JP intent)
  * -> For each photo 1..N: étape3 (initial FR + final FR)
  * -> For each photo 1..N: étape4 (photo + final FR)
+ * -> For each photo 1..N: étape5 (comparison with color highlights)
  * -> Learning slide (SELF_NOTE bullets)
  */
 export async function generatePhotoTextePptx(
@@ -441,6 +539,7 @@ export async function generatePhotoTextePptx(
   for (const p of photos) addEtape2JapaneseSlide(pptx, p);
   for (const p of photos) addEtape3FrenchSlide(pptx, p);
   for (const p of photos) addEtape4FinalSlide(pptx, p);
+  for (const p of photos) addEtape5ComparisonSlide(pptx, p);
 
   // Final learning slide (SELF_NOTE)
   const bullets = cleanLinesToBullets(data.learningBullets ?? []);

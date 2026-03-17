@@ -1091,3 +1091,29 @@ button[disabled] {
         border-color: var(--theme-border);
     }
 }
+
+.diff-hl-grammar {
+    background: #fff59d;
+    border-radius: 4px;
+}
+
+.diff-hl-known {
+    background: #f8bbd0;
+    border-radius: 4px;
+}
+
+.diff-hl-unknown {
+    background: #b2ebf2;
+    border-radius: 4px;
+}
+
+.diff-legend {
+    margin-top: 10px;
+    border-top: 1px dashed var(--theme-border);
+    padding-top: 8px;
+}
+
+.diff-legend p {
+    margin: 6px 0;
+    font-size: 13px;
+}
