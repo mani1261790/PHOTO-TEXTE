@@ -35,6 +35,10 @@ function splitPreserveSpaces(value: string): string[] {
   return value.split(/(\s+)/g).filter((x) => x.length > 0);
 }
 
+function isWhitespace(value: string): boolean {
+  return /^\s+$/.test(value);
+}
+
 export function DiffReadOnly({
   tokens,
   knownWords = [],
@@ -104,20 +108,35 @@ export function DiffReadOnly({
     setWordClass(overrideKey, nextClassName);
   }
 
-  function handleWordPointerEnter(
-    event: PointerEvent<HTMLButtonElement>,
-    overrideKey: string
-  ) {
+  function clearDragState(pointerId: number) {
+    if (dragStateRef.current?.pointerId !== pointerId) return;
+    dragStateRef.current = null;
+  }
+
+  function applyDraggedWord(target: EventTarget | null) {
     const dragState = dragStateRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) return;
-    if (dragState.appliedKeys.has(overrideKey)) return;
+    if (!dragState) return;
+
+    const wordButton = target instanceof Element
+      ? target.closest<HTMLButtonElement>('[data-diff-word-key]')
+      : null;
+    const overrideKey = wordButton?.dataset.diffWordKey;
+    if (!overrideKey || dragState.appliedKeys.has(overrideKey)) return;
+
     dragState.appliedKeys.add(overrideKey);
     setWordClass(overrideKey, dragState.className);
   }
 
-  function clearDragState(pointerId: number) {
-    if (dragStateRef.current?.pointerId !== pointerId) return;
-    dragStateRef.current = null;
+  function handleWordPointerMove(event: PointerEvent<HTMLButtonElement>) {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    applyDraggedWord(document.elementFromPoint(event.clientX, event.clientY));
+  }
+
+  function handleDiffBlockPointerMove(event: PointerEvent<HTMLPreElement>) {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    applyDraggedWord(event.target);
   }
 
   function handleWordKeyDown(
@@ -136,7 +155,9 @@ export function DiffReadOnly({
     defaultClassName: HighlightClassName
   ) {
     const key = normalizeWord(part);
-    const activeClassName = normalizeHighlightClass(wordClassByKey[overrideKey] ?? defaultClassName);
+    const activeClassName = normalizeHighlightClass(
+      wordClassByKey[overrideKey] ?? (key ? defaultClassName : '')
+    );
     const canTap = interactiveWordHighlight && Boolean(key);
 
     if (!canTap) {
@@ -151,9 +172,10 @@ export function DiffReadOnly({
       <button
         key={overrideKey}
         type="button"
+        data-diff-word-key={overrideKey}
         className={`diff-word-btn${activeClassName ? ` ${activeClassName}` : ''}`}
         onPointerDown={(event) => handleWordPointerDown(event, overrideKey, activeClassName)}
-        onPointerEnter={(event) => handleWordPointerEnter(event, overrideKey)}
+        onPointerMove={handleWordPointerMove}
         onPointerUp={(event) => clearDragState(event.pointerId)}
         onPointerCancel={(event) => clearDragState(event.pointerId)}
         onLostPointerCapture={(event) => clearDragState(event.pointerId)}
@@ -179,7 +201,10 @@ export function DiffReadOnly({
             )
           : t('操作不可', 'Non modifiable')}
       </p>
-      <pre className="diff-block">
+      <pre
+        className="diff-block"
+        onPointerMove={isInteractiveHighlightMode ? handleDiffBlockPointerMove : undefined}
+      >
         {tokens.map((token, idx) => {
           if (isInteractiveHighlightMode) {
             if (token.kind === 'remove') return null;
@@ -188,7 +213,11 @@ export function DiffReadOnly({
               token.kind === 'add' ? 'diff-hl-grammar' : '';
 
             return splitPreserveSpaces(token.value).map((part, partIdx) =>
-              renderInteractivePart(part, `${idx}-${partIdx}`, defaultClassName)
+              renderInteractivePart(
+                part,
+                `${idx}-${partIdx}`,
+                isWhitespace(part) ? '' : defaultClassName
+              )
             );
           }
 
