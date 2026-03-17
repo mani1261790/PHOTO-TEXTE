@@ -46,6 +46,7 @@ export function DiffReadOnly({
 }: Props) {
   const { language } = useLanguage();
   const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
+  const isInteractiveHighlightMode = interactiveWordHighlight && !showDiffColors;
   const [wordClassByKey, setWordClassByKey] = useState<Record<string, string>>({});
   const dragStateRef = useRef<{
     pointerId: number;
@@ -165,18 +166,22 @@ export function DiffReadOnly({
 
   return (
     <div className="card">
-      <h3>{t('差分表示（読み取り専用）', 'Diff (lecture seule)')}</h3>
+      <h3>
+        {isInteractiveHighlightMode
+          ? t('訂正ハイライト（読み取り専用）', 'Surlignage des corrections (lecture seule)')
+          : t('差分表示（読み取り専用）', 'Diff (lecture seule)')}
+      </h3>
       <p className="badge">
-        {interactiveWordHighlight
+        {isInteractiveHighlightMode
           ? t(
-              '訂正語は最初だけ黄色。単語をタップで無色→黄→ピンク→青→無色、押したままなぞると複数語をまとめて変更。',
-              'Les mots corriges commencent en jaune. Touchez pour faire tourner sans couleur -> jaune -> rose -> bleu -> sans couleur. Glissez pour appliquer a plusieurs mots.'
+              '最終文だけを表示しています。訂正語は最初だけ黄色。単語をタップで無色→黄→ピンク→青→無色、押したままなぞると複数語をまとめて変更。',
+              'Seul le texte final est affiche. Les mots corriges commencent en jaune. Touchez pour faire tourner sans couleur -> jaune -> rose -> bleu -> sans couleur. Glissez pour appliquer a plusieurs mots.'
             )
           : t('操作不可', 'Non modifiable')}
       </p>
       <pre className="diff-block">
         {tokens.map((token, idx) => {
-          if (interactiveWordHighlight && !showDiffColors) {
+          if (isInteractiveHighlightMode) {
             if (token.kind === 'remove') return null;
 
             const defaultClassName: HighlightClassName =
@@ -214,9 +219,19 @@ export function DiffReadOnly({
 
       {showLegend ? (
         <div className="diff-legend">
-          <p><span className="diff-hl-grammar">{t('文法は黄色でハイライト', 'Je souligne la grammaire en jaune')}</span></p>
-          <p><span className="diff-hl-known">{t('知っている語はピンクでハイライト', 'Je souligne les mots que je connais en rose')}</span></p>
-          <p><span className="diff-hl-unknown">{t('覚えたい語は青でハイライト', 'Je souligne les mots utiles, que je ne connais pas, en bleu')}</span></p>
+          {isInteractiveHighlightMode ? (
+            <>
+              <p><span className="diff-hl-grammar">{t('黄色は訂正が入った語', 'Le jaune indique les mots corriges')}</span></p>
+              <p><span className="diff-hl-known">{t('ピンクは手動で付ける印', 'Le rose est un repere manuel')}</span></p>
+              <p><span className="diff-hl-unknown">{t('青も手動で付ける印', 'Le bleu est aussi un repere manuel')}</span></p>
+            </>
+          ) : (
+            <>
+              <p><span className="diff-hl-grammar">{t('文法は黄色でハイライト', 'Je souligne la grammaire en jaune')}</span></p>
+              <p><span className="diff-hl-known">{t('知っている語はピンクでハイライト', 'Je souligne les mots que je connais en rose')}</span></p>
+              <p><span className="diff-hl-unknown">{t('覚えたい語は青でハイライト', 'Je souligne les mots utiles, que je ne connais pas, en bleu')}</span></p>
+            </>
+          )}
         </div>
       ) : null}
     </div>

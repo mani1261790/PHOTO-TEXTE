@@ -970,11 +970,11 @@ export function EntryWizard({ id }: { id: string }) {
                 {activePhoto.final_fr ? (
                   diffErrorByPhotoId[activePhoto.id] ? (
                     <div className="card">
-                      <h3>{t("差分表示", "Comparer les versions")}</h3>
+                      <h3>{t("訂正ハイライト", "Surlignage des corrections")}</h3>
                       <p className="badge">
                         {t(
-                          "差分の取得に失敗しました。",
-                          "Échec du chargement du diff.",
+                          "訂正ハイライトの読み込みに失敗しました。",
+                          "Échec du chargement du surlignage des corrections.",
                         )}
                       </p>
                     </div>
@@ -990,11 +990,11 @@ export function EntryWizard({ id }: { id: string }) {
                     />
                   ) : (
                     <div className="card">
-                      <h3>{t("差分表示", "Comparer les versions")}</h3>
+                      <h3>{t("訂正ハイライト", "Surlignage des corrections")}</h3>
                       <p className="badge">
                         {diffLoadingId === activePhoto.id
-                          ? t("差分を読み込み中…", "Chargement du diff…")
-                          : t("差分を準備中…", "Préparation du diff…")}
+                          ? t("訂正ハイライトを読み込み中…", "Chargement du surlignage des corrections…")
+                          : t("訂正ハイライトを準備中…", "Préparation du surlignage des corrections…")}
                       </p>
                     </div>
                   )
