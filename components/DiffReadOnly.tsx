@@ -129,6 +129,40 @@ export function DiffReadOnly({
     setWordClass(overrideKey, getNextClassName(currentClassName));
   }
 
+  function renderInteractivePart(
+    part: string,
+    overrideKey: string,
+    defaultClassName: HighlightClassName
+  ) {
+    const key = normalizeWord(part);
+    const activeClassName = normalizeHighlightClass(wordClassByKey[overrideKey] ?? defaultClassName);
+    const canTap = interactiveWordHighlight && Boolean(key);
+
+    if (!canTap) {
+      return (
+        <span key={overrideKey} className={activeClassName}>
+          {part}
+        </span>
+      );
+    }
+
+    return (
+      <button
+        key={overrideKey}
+        type="button"
+        className={`diff-word-btn${activeClassName ? ` ${activeClassName}` : ''}`}
+        onPointerDown={(event) => handleWordPointerDown(event, overrideKey, activeClassName)}
+        onPointerEnter={(event) => handleWordPointerEnter(event, overrideKey)}
+        onPointerUp={(event) => clearDragState(event.pointerId)}
+        onPointerCancel={(event) => clearDragState(event.pointerId)}
+        onLostPointerCapture={(event) => clearDragState(event.pointerId)}
+        onKeyDown={(event) => handleWordKeyDown(event, overrideKey, activeClassName)}
+      >
+        {part}
+      </button>
+    );
+  }
+
   return (
     <div className="card">
       <h3>{t('差分表示（読み取り専用）', 'Diff (lecture seule)')}</h3>
@@ -142,6 +176,17 @@ export function DiffReadOnly({
       </p>
       <pre className="diff-block">
         {tokens.map((token, idx) => {
+          if (interactiveWordHighlight && !showDiffColors) {
+            if (token.kind === 'remove') return null;
+
+            const defaultClassName: HighlightClassName =
+              token.kind === 'add' ? 'diff-hl-grammar' : '';
+
+            return splitPreserveSpaces(token.value).map((part, partIdx) =>
+              renderInteractivePart(part, `${idx}-${partIdx}`, defaultClassName)
+            );
+          }
+
           if (token.kind === 'add') {
             return (
               <span key={idx} className={showDiffColors ? 'diff-add' : 'diff-add diff-add-muted'}>
@@ -162,33 +207,7 @@ export function DiffReadOnly({
             let className: HighlightClassName = '';
             if (key && grammarSet.has(key)) className = 'diff-hl-grammar';
 
-            const overrideKey = `${idx}-${partIdx}`;
-            const activeClassName = normalizeHighlightClass(wordClassByKey[overrideKey] ?? className);
-            const canTap = interactiveWordHighlight && Boolean(key);
-
-            if (canTap) {
-              return (
-                <button
-                  key={`${idx}-${partIdx}`}
-                  type="button"
-                  className={`diff-word-btn${activeClassName ? ` ${activeClassName}` : ''}`}
-                  onPointerDown={(event) => handleWordPointerDown(event, overrideKey, activeClassName)}
-                  onPointerEnter={(event) => handleWordPointerEnter(event, overrideKey)}
-                  onPointerUp={(event) => clearDragState(event.pointerId)}
-                  onPointerCancel={(event) => clearDragState(event.pointerId)}
-                  onLostPointerCapture={(event) => clearDragState(event.pointerId)}
-                  onKeyDown={(event) => handleWordKeyDown(event, overrideKey, activeClassName)}
-                >
-                  {part}
-                </button>
-              );
-            }
-
-            return (
-              <span key={`${idx}-${partIdx}`} className={activeClassName}>
-                {part}
-              </span>
-            );
+            return renderInteractivePart(part, `${idx}-${partIdx}`, className);
           });
         })}
       </pre>
