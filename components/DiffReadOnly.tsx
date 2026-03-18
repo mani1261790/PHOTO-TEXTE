@@ -187,13 +187,13 @@ export function DiffReadOnly({
   }
 
   return (
-    <div className="card">
+    <div className="card diff-readonly-card">
       <h3>
         {isInteractiveHighlightMode
           ? t('訂正ハイライト（読み取り専用）', 'Surlignage des corrections (lecture seule)')
           : t('差分表示（読み取り専用）', 'Diff (lecture seule)')}
       </h3>
-      <p className="badge">
+      <p className="badge diff-instruction-badge">
         {isInteractiveHighlightMode
           ? t(
               '最終文だけを表示しています。訂正語は最初だけ黄色。単語をタップで無色→黄→ピンク→青→無色、押したままなぞると複数語をまとめて変更。',
