@@ -1,6 +1,6 @@
 # PHOTO-TEXTE
 
-プライバシー重視の PHOTO-TEXTE 作成アプリです（Next.js + Supabase + OpenAI API）。
+PHOTO-TEXTE 作成アプリです（Next.js + Supabase + OpenAI API）。
 
 ## 概要
 
@@ -99,7 +99,7 @@ flowchart TD
     M2 --> M3{レート制限内?}
     M3 -- No --> X1
     M3 -- Yes --> M4{final_frが1件以上ある?}
-    M4 -- No --> M5[suggestions=[]]
+    M4 -- No --> M5["suggestions は空配列"]
     M4 -- Yes --> M6[未知語抽出 + 学習メモ生成]
 
     I --> N[PPTX出力 API]
@@ -120,7 +120,7 @@ flowchart TD
     N7 -- No --> X12
     N7 -- Yes --> N8
 
-    N8 --> N9{include_memos=true ?}
+    N8 --> N9{"include_memos が true ?"}
     N9 -- Yes --> N10[SELF_NOTEのみ抽出]
     N9 -- No --> N11[学習メモなし]
     N10 --> N12[PPTX生成]
