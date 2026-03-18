@@ -4,7 +4,10 @@ import { badRequest } from "@/lib/api/errors";
 import { handleApiError, ok } from "@/lib/api/response";
 import { highlightUnknownWords } from "@/lib/cefr/vocab";
 import { computeReadOnlyDiff } from "@/lib/diff/read-only";
-import { buildLearningHighlightsWithAI } from "@/lib/learning/highlight";
+import {
+  buildLearningHighlightsWithAI,
+  normalizeLearningHighlights,
+} from "@/lib/learning/highlight";
 import { authedClient } from "@/lib/supabase/authed";
 
 export async function GET(
@@ -21,7 +24,7 @@ export async function GET(
     ] = await Promise.all([
       client
         .from("entry_photos")
-        .select("id,entry_id,user_id,draft_fr,final_fr")
+        .select("id,entry_id,user_id,draft_fr,final_fr,learning_highlights")
         .eq("id", photoId)
         .eq("entry_id", entryId)
         .single(),
@@ -46,11 +49,13 @@ export async function GET(
     }
 
     const diff = computeReadOnlyDiff(photo.draft_fr, photo.final_fr);
-    const learningHighlights = await buildLearningHighlightsWithAI(
-      photo.draft_fr ?? "",
-      photo.final_fr ?? "",
-      profile.cefr_level,
-    );
+    const learningHighlights =
+      normalizeLearningHighlights(photo.learning_highlights) ??
+      await buildLearningHighlightsWithAI(
+        photo.draft_fr ?? "",
+        photo.final_fr ?? "",
+        profile.cefr_level,
+      );
 
     return ok({
       entry_id: entryId,

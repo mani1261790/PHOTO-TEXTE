@@ -2,12 +2,17 @@ import { diffWords } from "diff";
 
 import { HighlightSuggestion, suggestHighlightColors } from "@/lib/ai/client";
 import { highlightUnknownWords } from "@/lib/cefr/vocab";
+import { DiffToken, computeReadOnlyDiff } from "@/lib/diff/read-only";
 import { CEFRLevel } from "@/lib/types";
+
+export type SavedHighlightKind = "none" | "grammar" | "known" | "unknown";
 
 export type LearningHighlights = {
   knownWords: string[];
   unknownWords: string[];
   grammarWords: string[];
+  tokenSignature?: string | null;
+  wordClassByKey?: Record<string, SavedHighlightKind>;
 };
 
 const grammarFunctionWords = new Set([
@@ -92,7 +97,7 @@ const grammarFunctionWords = new Set([
   "était",
 ]);
 
-function normalizeWord(token: string): string {
+export function normalizeLearningWord(token: string): string {
   return token
     .toLowerCase()
     .replace(/[’]/g, "'")
@@ -101,8 +106,143 @@ function normalizeWord(token: string): string {
 
 function words(text: string): string[] {
   return (text.match(/[A-Za-zÀ-ÿœŒæÆ'’]+/g) ?? [])
-    .map((w) => normalizeWord(w))
+    .map((w) => normalizeLearningWord(w))
     .filter(Boolean);
+}
+
+export function splitLearningText(value: string): string[] {
+  return value.split(/(\s+)/g).filter((x) => x.length > 0);
+}
+
+export function getLearningTokenSignature(tokens: DiffToken[]): string {
+  return tokens.map((token) => `${token.kind}:${token.value}`).join("\u241f");
+}
+
+function normalizeSavedHighlightKind(value: unknown): SavedHighlightKind | null {
+  return value === "none" ||
+    value === "grammar" ||
+    value === "known" ||
+    value === "unknown"
+    ? value
+    : null;
+}
+
+function uniqueNormalized(words: string[]): string[] {
+  return [...new Set(words.map((word) => normalizeLearningWord(word)).filter(Boolean))];
+}
+
+export function normalizeLearningHighlights(input: unknown): LearningHighlights | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const value = input as {
+    knownWords?: unknown;
+    unknownWords?: unknown;
+    grammarWords?: unknown;
+    tokenSignature?: unknown;
+    wordClassByKey?: unknown;
+  };
+
+  const wordClassByKey =
+    value.wordClassByKey && typeof value.wordClassByKey === "object"
+      ? Object.fromEntries(
+          Object.entries(value.wordClassByKey as Record<string, unknown>)
+            .map(([key, kind]) => [key, normalizeSavedHighlightKind(kind)] as const)
+            .filter((entry): entry is [string, SavedHighlightKind] => Boolean(entry[1])),
+        )
+      : {};
+
+  return {
+    knownWords: uniqueNormalized(Array.isArray(value.knownWords) ? value.knownWords.filter((word): word is string => typeof word === "string") : []),
+    unknownWords: uniqueNormalized(Array.isArray(value.unknownWords) ? value.unknownWords.filter((word): word is string => typeof word === "string") : []),
+    grammarWords: uniqueNormalized(Array.isArray(value.grammarWords) ? value.grammarWords.filter((word): word is string => typeof word === "string") : []),
+    tokenSignature: typeof value.tokenSignature === "string" ? value.tokenSignature : null,
+    wordClassByKey,
+  };
+}
+
+function resolveDefaultKind(
+  word: string,
+  fallbackKind: SavedHighlightKind,
+  grammarSet: Set<string>,
+  knownSet: Set<string>,
+  unknownSet: Set<string>,
+): SavedHighlightKind {
+  if (!word) return "none";
+  if (unknownSet.has(word)) return "unknown";
+  if (grammarSet.has(word)) return "grammar";
+  if (knownSet.has(word)) return "known";
+  return fallbackKind;
+}
+
+export function buildEffectiveLearningHighlights(
+  tokens: DiffToken[],
+  learningHighlights: LearningHighlights,
+): LearningHighlights {
+  const grammarSet = new Set(
+    (learningHighlights.grammarWords ?? []).map(normalizeLearningWord).filter(Boolean),
+  );
+  const knownSet = new Set(
+    (learningHighlights.knownWords ?? []).map(normalizeLearningWord).filter(Boolean),
+  );
+  const unknownSet = new Set(
+    (learningHighlights.unknownWords ?? []).map(normalizeLearningWord).filter(Boolean),
+  );
+  const tokenSignature = getLearningTokenSignature(tokens);
+  const applyOverrides = learningHighlights.tokenSignature === tokenSignature;
+  const savedOverrides = applyOverrides ? learningHighlights.wordClassByKey ?? {} : {};
+
+  const effectiveGrammar = new Set<string>();
+  const effectiveKnown = new Set<string>();
+  const effectiveUnknown = new Set<string>();
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.kind === "remove") continue;
+
+    const fallbackKind: SavedHighlightKind = token.kind === "add" ? "grammar" : "none";
+    const parts = splitLearningText(token.value);
+    for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
+      const part = parts[partIndex];
+      const word = normalizeLearningWord(part);
+      if (!word) continue;
+
+      const overrideKey = `${index}-${partIndex}`;
+      const kind =
+        savedOverrides[overrideKey] ??
+        resolveDefaultKind(word, fallbackKind, grammarSet, knownSet, unknownSet);
+
+      if (kind === "grammar") effectiveGrammar.add(word);
+      else if (kind === "known") effectiveKnown.add(word);
+      else if (kind === "unknown") effectiveUnknown.add(word);
+    }
+  }
+
+  for (const word of effectiveUnknown) {
+    effectiveKnown.delete(word);
+    effectiveGrammar.delete(word);
+  }
+  for (const word of effectiveGrammar) {
+    effectiveKnown.delete(word);
+  }
+
+  return {
+    knownWords: [...effectiveKnown],
+    unknownWords: [...effectiveUnknown],
+    grammarWords: [...effectiveGrammar],
+    tokenSignature,
+    wordClassByKey: savedOverrides,
+  };
+}
+
+export function buildLearningHighlightsFromDiff(
+  draftFr: string,
+  finalFr: string,
+  learningHighlights: LearningHighlights,
+): LearningHighlights {
+  const diff = computeReadOnlyDiff(draftFr ?? "", finalFr ?? "");
+  return buildEffectiveLearningHighlights(diff.tokens, learningHighlights);
 }
 
 function stripDiacritics(value: string): string {
@@ -201,7 +341,7 @@ export function buildLearningHighlights(
   const unknownSet = new Set(
     highlightUnknownWords(finalFr, cefrLevel)
       .filter((t) => t.unknown)
-      .map((t) => normalizeWord(t.token))
+      .map((t) => normalizeLearningWord(t.token))
       .filter((word) => Boolean(word) && changedFinalWords.has(word)),
   );
 
@@ -220,7 +360,7 @@ export function buildLearningHighlights(
 }
 
 function unique(words: string[]): string[] {
-  return [...new Set(words.filter(Boolean))];
+  return [...new Set(words.map((word) => normalizeLearningWord(word)).filter(Boolean))];
 }
 
 function mergeHighlightSuggestions(

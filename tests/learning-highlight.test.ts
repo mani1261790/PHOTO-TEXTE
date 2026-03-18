@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildLearningHighlights } from "@/lib/learning/highlight";
+import { computeReadOnlyDiff } from "@/lib/diff/read-only";
+import {
+  buildLearningHighlights,
+  buildLearningHighlightsFromDiff,
+  getLearningTokenSignature,
+} from "@/lib/learning/highlight";
 
 describe("buildLearningHighlights", () => {
   it("highlights grammar corrections separately from lexical corrections", () => {
@@ -37,5 +42,29 @@ describe("buildLearningHighlights", () => {
     expect(result.grammarWords).toEqual(["à"]);
     expect(result.knownWords).toEqual([]);
     expect(result.unknownWords).toEqual([]);
+  });
+
+  it("reapplies saved per-token overrides when the diff signature matches", () => {
+    const draft = "Je vais a la maison.";
+    const final = "Je vais à la maison à Paris.";
+    const diff = computeReadOnlyDiff(draft, final);
+
+    const result = buildLearningHighlightsFromDiff(
+      draft,
+      final,
+      {
+        knownWords: [],
+        unknownWords: [],
+        grammarWords: ["à"],
+        tokenSignature: getLearningTokenSignature(diff.tokens),
+        wordClassByKey: {
+          "2-0": "unknown",
+        },
+      },
+    );
+
+    expect(result.unknownWords).toEqual(["à"]);
+    expect(result.grammarWords).toEqual(["paris"]);
+    expect(result.wordClassByKey).toEqual({ "2-0": "unknown" });
   });
 });

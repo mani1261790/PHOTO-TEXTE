@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+const learningHighlightKindSchema = z.enum(["none", "grammar", "known", "unknown"]);
+
+const learningHighlightsSchema = z.object({
+  knownWords: z.array(z.string().min(1)).default([]),
+  unknownWords: z.array(z.string().min(1)).default([]),
+  grammarWords: z.array(z.string().min(1)).default([]),
+  tokenSignature: z.string().optional().nullable(),
+  wordClassByKey: z.record(z.string(), learningHighlightKindSchema).optional(),
+});
+
 export const profileUpdateSchema = z.object({
   email: z.string().email().max(320).optional(),
   display_name: z.string().max(80).optional().nullable(),
@@ -36,6 +46,7 @@ export const updateEntrySchema = z.object({
   title_fr: z.string().min(1).max(200).optional(),
   draft_fr: z.string().min(1).max(8000).optional(),
   photo_asset_id: z.string().uuid().optional(),
+  learning_highlights: learningHighlightsSchema.optional().nullable(),
 });
 
 /**
@@ -47,6 +58,7 @@ export const updateEntryPhotoSchema = z.object({
   jp_auto: z.string().min(1).max(8000).optional().nullable(),
   jp_intent: z.string().min(1).max(8000).optional().nullable(),
   final_fr: z.string().min(1).max(8000).optional().nullable(),
+  learning_highlights: learningHighlightsSchema.optional().nullable(),
 });
 
 export const lockIntentSchema = z.object({

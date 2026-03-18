@@ -52,7 +52,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const { data: photos, error: photosError } = await client
       .from('entry_photos')
       .select(
-        'id,entry_id,user_id,position,photo_asset_id,draft_fr,jp_auto,jp_intent,final_fr,status,created_at,updated_at'
+        'id,entry_id,user_id,position,photo_asset_id,draft_fr,jp_auto,jp_intent,final_fr,learning_highlights,status,created_at,updated_at'
       )
       .eq('entry_id', entryId)
       .order('position', { ascending: true });

@@ -52,7 +52,7 @@ export async function PUT(
 
     assertDraftMutable(entry.status);
 
-    const update: Record<string, string> = {};
+    const update: Record<string, unknown> = {};
     if (payload.title_fr !== undefined) {
       update.title_fr = payload.title_fr;
     }
@@ -61,6 +61,9 @@ export async function PUT(
     }
     if (payload.photo_asset_id !== undefined) {
       update.photo_asset_id = payload.photo_asset_id;
+    }
+    if (payload.learning_highlights !== undefined) {
+      update.learning_highlights = payload.learning_highlights;
     }
 
     if (!Object.keys(update).length) {

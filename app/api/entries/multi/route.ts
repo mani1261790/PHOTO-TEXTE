@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       .from('entry_photos')
       .insert(photoInserts)
       .select(
-        'id,entry_id,user_id,position,photo_asset_id,draft_fr,jp_auto,jp_intent,final_fr,status,created_at,updated_at'
+        'id,entry_id,user_id,position,photo_asset_id,draft_fr,jp_auto,jp_intent,final_fr,learning_highlights,status,created_at,updated_at'
       )
       .order('position', { ascending: true });
 

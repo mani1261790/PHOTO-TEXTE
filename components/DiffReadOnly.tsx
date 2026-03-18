@@ -3,6 +3,13 @@
 import { KeyboardEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DiffToken } from '@/lib/diff/read-only';
+import {
+  LearningHighlights,
+  SavedHighlightKind,
+  getLearningTokenSignature,
+  normalizeLearningWord,
+  splitLearningText,
+} from '@/lib/learning/highlight';
 import { useLanguage } from '@/components/LanguageProvider';
 
 type Props = {
@@ -10,6 +17,9 @@ type Props = {
   knownWords?: string[];
   unknownWords?: string[];
   grammarWords?: string[];
+  savedTokenSignature?: string | null;
+  savedWordClassByKey?: Record<string, SavedHighlightKind>;
+  onLearningHighlightsChange?: (next: LearningHighlights) => void;
   showLegend?: boolean;
   interactiveWordHighlight?: boolean;
   showDiffColors?: boolean;
@@ -17,22 +27,18 @@ type Props = {
 
 type HighlightClassName = '' | 'diff-hl-grammar' | 'diff-hl-known' | 'diff-hl-unknown';
 
-const HIGHLIGHT_CLASSES: HighlightClassName[] = [
-  '',
-  'diff-hl-grammar',
-  'diff-hl-known',
-  'diff-hl-unknown',
+const HIGHLIGHT_ORDER: SavedHighlightKind[] = [
+  'none',
+  'grammar',
+  'known',
+  'unknown',
 ];
 
-function normalizeWord(token: string): string {
-  return token
-    .toLowerCase()
-    .replace(/[’]/g, "'")
-    .replace(/^[^a-zàâçéèêëîïôûùüÿñæœ']+|[^a-zàâçéèêëîïôûùüÿñæœ']+$/gi, '');
-}
-
-function splitPreserveSpaces(value: string): string[] {
-  return value.split(/(\s+)/g).filter((x) => x.length > 0);
+function kindToClassName(kind: SavedHighlightKind): HighlightClassName {
+  if (kind === 'grammar') return 'diff-hl-grammar';
+  if (kind === 'known') return 'diff-hl-known';
+  if (kind === 'unknown') return 'diff-hl-unknown';
+  return '';
 }
 
 function isWhitespace(value: string): boolean {
@@ -44,6 +50,9 @@ export function DiffReadOnly({
   knownWords = [],
   unknownWords = [],
   grammarWords = [],
+  savedTokenSignature,
+  savedWordClassByKey,
+  onLearningHighlightsChange,
   showLegend = false,
   interactiveWordHighlight = false,
   showDiffColors = true,
@@ -51,65 +60,108 @@ export function DiffReadOnly({
   const { language } = useLanguage();
   const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const isInteractiveHighlightMode = interactiveWordHighlight && !showDiffColors;
-  const [wordClassByKey, setWordClassByKey] = useState<Record<string, string>>({});
+  const [wordClassByKey, setWordClassByKey] = useState<Record<string, SavedHighlightKind>>({});
   const dragStateRef = useRef<{
     pointerId: number;
-    className: HighlightClassName;
+    className: SavedHighlightKind;
     appliedKeys: Set<string>;
   } | null>(null);
-  const tokenSignature = useMemo(
-    () => tokens.map((token) => `${token.kind}:${token.value}`).join('\u241f'),
-    [tokens]
-  );
+  const tokenSignature = useMemo(() => getLearningTokenSignature(tokens), [tokens]);
 
   const grammarSet = useMemo(
-    () => new Set(grammarWords.map(normalizeWord).filter(Boolean)),
+    () => new Set(grammarWords.map(normalizeLearningWord).filter(Boolean)),
     [grammarWords]
   );
   const knownSet = useMemo(
-    () => new Set(knownWords.map(normalizeWord).filter(Boolean)),
+    () => new Set(knownWords.map(normalizeLearningWord).filter(Boolean)),
     [knownWords]
   );
   const unknownSet = useMemo(
-    () => new Set(unknownWords.map(normalizeWord).filter(Boolean)),
+    () => new Set(unknownWords.map(normalizeLearningWord).filter(Boolean)),
     [unknownWords]
   );
 
   useEffect(() => {
+    if (savedTokenSignature === tokenSignature) {
+      setWordClassByKey(savedWordClassByKey ?? {});
+      return;
+    }
     setWordClassByKey({});
-  }, [tokenSignature]);
+  }, [savedTokenSignature, savedWordClassByKey, tokenSignature]);
 
-  function cycleWordClass(current: string): HighlightClassName {
-    const currentIndex = HIGHLIGHT_CLASSES.indexOf(normalizeHighlightClass(current));
-    return HIGHLIGHT_CLASSES[(currentIndex + 1) % HIGHLIGHT_CLASSES.length];
+  function cycleWordClass(current: SavedHighlightKind): SavedHighlightKind {
+    const currentIndex = HIGHLIGHT_ORDER.indexOf(current);
+    return HIGHLIGHT_ORDER[(currentIndex + 1) % HIGHLIGHT_ORDER.length];
   }
 
-  function setWordClass(overrideKey: string, nextClassName: HighlightClassName) {
-    setWordClassByKey((prev) => {
-      return {
-        ...prev,
-        [overrideKey]: nextClassName,
-      };
+  function getDefaultKind(part: string, fallbackKind: SavedHighlightKind): SavedHighlightKind {
+    const key = normalizeLearningWord(part);
+    if (!key) return 'none';
+    if (unknownSet.has(key)) return 'unknown';
+    if (grammarSet.has(key)) return 'grammar';
+    if (knownSet.has(key)) return 'known';
+    return fallbackKind;
+  }
+
+  function emitLearningHighlights(nextWordClassByKey: Record<string, SavedHighlightKind>) {
+    if (!onLearningHighlightsChange) return;
+
+    const nextKnownWords = new Set<string>();
+    const nextUnknownWords = new Set<string>();
+    const nextGrammarWords = new Set<string>();
+
+    tokens.forEach((token, tokenIndex) => {
+      if (token.kind === 'remove') return;
+
+      const fallbackKind: SavedHighlightKind = token.kind === 'add' ? 'grammar' : 'none';
+      splitLearningText(token.value).forEach((part, partIndex) => {
+        const word = normalizeLearningWord(part);
+        if (!word) return;
+
+        const overrideKey = `${tokenIndex}-${partIndex}`;
+        const highlightKind =
+          nextWordClassByKey[overrideKey] ?? getDefaultKind(part, fallbackKind);
+
+        if (highlightKind === 'grammar') nextGrammarWords.add(word);
+        else if (highlightKind === 'known') nextKnownWords.add(word);
+        else if (highlightKind === 'unknown') nextUnknownWords.add(word);
+      });
+    });
+
+    nextUnknownWords.forEach((word) => {
+      nextKnownWords.delete(word);
+      nextGrammarWords.delete(word);
+    });
+    nextGrammarWords.forEach((word) => {
+      nextKnownWords.delete(word);
+    });
+
+    onLearningHighlightsChange({
+      knownWords: [...nextKnownWords],
+      unknownWords: [...nextUnknownWords],
+      grammarWords: [...nextGrammarWords],
+      tokenSignature,
+      wordClassByKey: nextWordClassByKey,
     });
   }
 
-  function getNextClassName(currentClassName: string) {
-    return cycleWordClass(currentClassName);
-  }
-
-  function normalizeHighlightClass(value: string): HighlightClassName {
-    return HIGHLIGHT_CLASSES.includes(value as HighlightClassName)
-      ? (value as HighlightClassName)
-      : '';
+  function setWordClass(overrideKey: string, nextKind: SavedHighlightKind) {
+    setWordClassByKey((prev) => {
+      const next = { ...prev };
+      if (nextKind === 'none') delete next[overrideKey];
+      else next[overrideKey] = nextKind;
+      emitLearningHighlights(next);
+      return next;
+    });
   }
 
   function handleWordPointerDown(
     event: PointerEvent<HTMLButtonElement>,
     overrideKey: string,
-    currentClassName: string
+    currentKind: SavedHighlightKind
   ) {
     event.preventDefault();
-    const nextClassName = getNextClassName(currentClassName);
+    const nextClassName = cycleWordClass(currentKind);
     dragStateRef.current = {
       pointerId: event.pointerId,
       className: nextClassName,
@@ -153,31 +205,21 @@ export function DiffReadOnly({
   function handleWordKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,
     overrideKey: string,
-    currentClassName: string
+    currentKind: SavedHighlightKind
   ) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    setWordClass(overrideKey, getNextClassName(currentClassName));
-  }
-
-  function getDefaultClassName(part: string, fallbackClassName: HighlightClassName) {
-    const key = normalizeWord(part);
-    if (!key) return '';
-    if (unknownSet.has(key)) return 'diff-hl-unknown';
-    if (grammarSet.has(key)) return 'diff-hl-grammar';
-    if (knownSet.has(key)) return 'diff-hl-known';
-    return fallbackClassName;
+    setWordClass(overrideKey, cycleWordClass(currentKind));
   }
 
   function renderInteractivePart(
     part: string,
     overrideKey: string,
-    defaultClassName: HighlightClassName
+    defaultKind: SavedHighlightKind
   ) {
-    const key = normalizeWord(part);
-    const activeClassName = normalizeHighlightClass(
-      wordClassByKey[overrideKey] ?? (key ? defaultClassName : '')
-    );
+    const key = normalizeLearningWord(part);
+    const activeKind = key ? wordClassByKey[overrideKey] ?? defaultKind : 'none';
+    const activeClassName = kindToClassName(activeKind);
     const canTap = interactiveWordHighlight && Boolean(key);
 
     if (!canTap) {
@@ -194,12 +236,12 @@ export function DiffReadOnly({
         type="button"
         data-diff-word-key={overrideKey}
         className={`diff-word-btn${activeClassName ? ` ${activeClassName}` : ''}`}
-        onPointerDown={(event) => handleWordPointerDown(event, overrideKey, activeClassName)}
+        onPointerDown={(event) => handleWordPointerDown(event, overrideKey, activeKind)}
         onPointerMove={handleWordPointerMove}
         onPointerUp={(event) => clearDragState(event.pointerId)}
         onPointerCancel={(event) => clearDragState(event.pointerId)}
         onLostPointerCapture={(event) => clearDragState(event.pointerId)}
-        onKeyDown={(event) => handleWordKeyDown(event, overrideKey, activeClassName)}
+        onKeyDown={(event) => handleWordKeyDown(event, overrideKey, activeKind)}
       >
         {part}
       </button>
@@ -229,14 +271,14 @@ export function DiffReadOnly({
           if (isInteractiveHighlightMode) {
             if (token.kind === 'remove') return null;
 
-            const fallbackClassName: HighlightClassName =
-              token.kind === 'add' ? 'diff-hl-grammar' : '';
+            const fallbackKind: SavedHighlightKind =
+              token.kind === 'add' ? 'grammar' : 'none';
 
-            return splitPreserveSpaces(token.value).map((part, partIdx) =>
+            return splitLearningText(token.value).map((part, partIdx) =>
               renderInteractivePart(
                 part,
                 `${idx}-${partIdx}`,
-                isWhitespace(part) ? '' : getDefaultClassName(part, fallbackClassName)
+                isWhitespace(part) ? 'none' : getDefaultKind(part, fallbackKind)
               )
             );
           }
@@ -256,8 +298,8 @@ export function DiffReadOnly({
             );
           }
 
-          return splitPreserveSpaces(token.value).map((part, partIdx) => {
-            return renderInteractivePart(part, `${idx}-${partIdx}`, getDefaultClassName(part, ''));
+          return splitLearningText(token.value).map((part, partIdx) => {
+            return renderInteractivePart(part, `${idx}-${partIdx}`, getDefaultKind(part, 'none'));
           });
         })}
       </pre>

@@ -4,7 +4,10 @@ import { badRequest } from '@/lib/api/errors';
 import { handleApiError, ok } from '@/lib/api/response';
 import { highlightUnknownWords } from '@/lib/cefr/vocab';
 import { computeReadOnlyDiff } from '@/lib/diff/read-only';
-import { buildLearningHighlightsWithAI } from '@/lib/learning/highlight';
+import {
+  buildLearningHighlightsWithAI,
+  normalizeLearningHighlights,
+} from '@/lib/learning/highlight';
 import { authedClient } from '@/lib/supabase/authed';
 
 export async function GET(
@@ -32,11 +35,13 @@ export async function GET(
     }
 
     const diff = computeReadOnlyDiff(entry.draft_fr, entry.final_fr);
-    const learningHighlights = await buildLearningHighlightsWithAI(
-      entry.draft_fr ?? '',
-      entry.final_fr ?? '',
-      profile.cefr_level
-    );
+    const learningHighlights =
+      normalizeLearningHighlights(entry.learning_highlights) ??
+      await buildLearningHighlightsWithAI(
+        entry.draft_fr ?? '',
+        entry.final_fr ?? '',
+        profile.cefr_level
+      );
 
     return ok({
       entry_id: entry.id,

@@ -8,7 +8,11 @@ import { apiFetch } from "@/lib/api/fetcher";
 import { getAccessToken } from "@/lib/auth/token-store";
 import { useLanguage } from "@/components/LanguageProvider";
 import { DiffReadOnly } from "@/components/DiffReadOnly";
-import { buildLearningHighlights, LearningHighlights } from "@/lib/learning/highlight";
+import {
+  buildLearningHighlights,
+  LearningHighlights,
+  normalizeLearningHighlights,
+} from "@/lib/learning/highlight";
 import { DiffToken } from "@/lib/diff/read-only";
 import { CEFRLevel } from "@/lib/types";
 
@@ -42,6 +46,7 @@ type EntryPhoto = {
   jp_auto: string | null;
   jp_intent: string | null;
   final_fr: string | null;
+  learning_highlights?: LearningHighlights | null;
   status: EntryStatus;
   created_at: string;
   updated_at: string;
@@ -156,6 +161,7 @@ export function EntryWizard({ id }: { id: string }) {
     Record<string, string>
   >({});
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightSaveTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const autoTranslateInFlightRef = useRef<Record<string, boolean>>({});
 
   const draftCardRef = useRef<HTMLDivElement | null>(null);
@@ -188,6 +194,8 @@ export function EntryWizard({ id }: { id: string }) {
     const cached = activePhoto ? diffByPhotoId[activePhoto.id]?.learningHighlights : null;
     const cachedLevel = activePhoto ? diffByPhotoId[activePhoto.id]?.cefrLevel : null;
     if (cached && cachedLevel === (profile?.cefr_level ?? "A2")) return cached;
+    const saved = normalizeLearningHighlights(activePhoto.learning_highlights);
+    if (saved) return saved;
     return buildLearningHighlights(
       activePhoto.draft_fr ?? "",
       activePhoto.final_fr ?? "",
@@ -200,6 +208,12 @@ export function EntryWizard({ id }: { id: string }) {
     diffByPhotoId,
     profile?.cefr_level,
   ]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(highlightSaveTimerRef.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
 
   const progress = useMemo(() => {
     if (!photos.length) return 0;
@@ -449,6 +463,11 @@ export function EntryWizard({ id }: { id: string }) {
 
     apiFetch<PhotoDiff>(`/api/entries/${id}/photos/${activePhoto.id}/diff`)
       .then((res) => {
+        const learningHighlights =
+          normalizeLearningHighlights(res.learning_highlights) ??
+          normalizeLearningHighlights(activePhoto.learning_highlights) ??
+          buildLearningHighlights(draft, final, cefrLevel);
+
         setDiffByPhotoId((prev) => ({
           ...prev,
           [activePhoto.id]: {
@@ -456,9 +475,7 @@ export function EntryWizard({ id }: { id: string }) {
             final,
             tokens: res.diff.tokens,
             cefrLevel,
-            learningHighlights:
-              res.learning_highlights ??
-              buildLearningHighlights(draft, final, cefrLevel),
+            learningHighlights,
           },
         }));
       })
@@ -474,6 +491,61 @@ export function EntryWizard({ id }: { id: string }) {
         );
       });
   }, [activePhoto?.id, activePhoto?.draft_fr, activePhoto?.final_fr, id, profile?.cefr_level]);
+
+  function scheduleLearningHighlightsSave(
+    photoId: string,
+    learningHighlights: LearningHighlights,
+  ) {
+    const existingTimer = highlightSaveTimerRef.current[photoId];
+    if (existingTimer) clearTimeout(existingTimer);
+
+    highlightSaveTimerRef.current[photoId] = setTimeout(async () => {
+      try {
+        const updated = await apiFetch<EntryPhoto>(
+          `/api/entries/${id}/photos/${photoId}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ learning_highlights: learningHighlights }),
+          },
+        );
+
+        setPhotos((prev) =>
+          prev.map((photo) => (photo.id === updated.id ? { ...photo, ...updated } : photo)),
+        );
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        delete highlightSaveTimerRef.current[photoId];
+      }
+    }, 500);
+  }
+
+  function handleLearningHighlightsChange(
+    photoId: string,
+    learningHighlights: LearningHighlights,
+  ) {
+    setDiffByPhotoId((prev) => {
+      const current = prev[photoId];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [photoId]: {
+          ...current,
+          learningHighlights,
+        },
+      };
+    });
+
+    setPhotos((prev) =>
+      prev.map((photo) =>
+        photo.id === photoId
+          ? { ...photo, learning_highlights: learningHighlights }
+          : photo,
+      ),
+    );
+
+    scheduleLearningHighlightsSave(photoId, learningHighlights);
+  }
 
   async function updateEntryTitle(nextTitle: string) {
     if (!entry) return;
@@ -1017,6 +1089,11 @@ export function EntryWizard({ id }: { id: string }) {
                       knownWords={activeLearningHighlights.knownWords}
                       unknownWords={activeLearningHighlights.unknownWords}
                       grammarWords={activeLearningHighlights.grammarWords}
+                      savedTokenSignature={activeLearningHighlights.tokenSignature}
+                      savedWordClassByKey={activeLearningHighlights.wordClassByKey}
+                      onLearningHighlightsChange={(next) =>
+                        handleLearningHighlightsChange(activePhoto.id, next)
+                      }
                       showLegend
                       interactiveWordHighlight
                       showDiffColors={false}

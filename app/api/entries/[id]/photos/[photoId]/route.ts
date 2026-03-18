@@ -32,6 +32,9 @@ export async function PATCH(
     if (payload.jp_auto !== undefined) update.jp_auto = payload.jp_auto;
     if (payload.jp_intent !== undefined) update.jp_intent = payload.jp_intent;
     if (payload.final_fr !== undefined) update.final_fr = payload.final_fr;
+    if (payload.learning_highlights !== undefined) {
+      update.learning_highlights = payload.learning_highlights;
+    }
 
     if (Object.keys(update).length === 0) {
       badRequest('NO_FIELDS', 'No fields to update');
@@ -57,7 +60,7 @@ export async function PATCH(
       .eq('id', photoId)
       .eq('entry_id', entryId)
       .select(
-        'id,entry_id,user_id,position,photo_asset_id,draft_fr,jp_auto,jp_intent,final_fr,status,created_at,updated_at'
+        'id,entry_id,user_id,position,photo_asset_id,draft_fr,jp_auto,jp_intent,final_fr,learning_highlights,status,created_at,updated_at'
       )
       .single();
 
@@ -88,7 +91,7 @@ export async function GET(
     const { data, error } = await client
       .from('entry_photos')
       .select(
-        'id,entry_id,user_id,position,photo_asset_id,draft_fr,jp_auto,jp_intent,final_fr,status,created_at,updated_at'
+        'id,entry_id,user_id,position,photo_asset_id,draft_fr,jp_auto,jp_intent,final_fr,learning_highlights,status,created_at,updated_at'
       )
       .eq('id', photoId)
       .eq('entry_id', entryId)

@@ -2,15 +2,14 @@ import path from "node:path";
 
 import PptxGenJS from "pptxgenjs";
 
-export interface PptxPhotoInput {
+import { buildLearningHighlightsFromDiff, LearningHighlights, normalizeLearningWord } from "@/lib/learning/highlight";
+
+export interface PptxPhotoInput extends LearningHighlights {
   position: number; // 1-based
   draftFr: string;
   jpAuto: string;
   jpIntent: string;
   finalFr: string;
-  knownWords?: string[];
-  unknownWords?: string[];
-  grammarWords?: string[];
   /**
    * A data URL such as:
    * - data:image/jpeg;base64,...
@@ -369,20 +368,18 @@ function tokenizeWithWhitespace(text: string): string[] {
   return text.split(/(\s+)/g).filter((x) => x.length > 0);
 }
 
-function normalizeWord(token: string): string {
-  return token
-    .toLowerCase()
-    .replace(/[’]/g, "'")
-    .replace(/^[^a-zàâçéèêëîïôûùüÿñæœ']+|[^a-zàâçéèêëîïôûùüÿñæœ']+$/gi, "");
-}
-
 function buildHighlightedRuns(photo: PptxPhotoInput): PptxGenJS.TextProps[] {
-  const known = new Set((photo.knownWords ?? []).map((w) => normalizeWord(w)));
-  const unknown = new Set((photo.unknownWords ?? []).map((w) => normalizeWord(w)));
-  const grammar = new Set((photo.grammarWords ?? []).map((w) => normalizeWord(w)));
+  const effectiveHighlights = buildLearningHighlightsFromDiff(
+    photo.draftFr ?? "",
+    photo.finalFr ?? "",
+    photo,
+  );
+  const known = new Set((effectiveHighlights.knownWords ?? []).map((w) => normalizeLearningWord(w)));
+  const unknown = new Set((effectiveHighlights.unknownWords ?? []).map((w) => normalizeLearningWord(w)));
+  const grammar = new Set((effectiveHighlights.grammarWords ?? []).map((w) => normalizeLearningWord(w)));
 
   return tokenizeWithWhitespace(photo.finalFr ?? "").map((token) => {
-    const key = normalizeWord(token);
+    const key = normalizeLearningWord(token);
     let highlight: string | undefined;
 
     if (key && grammar.has(key)) highlight = "FFF59D";
@@ -404,13 +401,39 @@ function addEtape5ComparisonSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
   s.background = { color: "F8FAFC" };
   addSlideTitle(s, `étape 5. Comparaison (photo ${photo.position})`);
 
+  const draftArea = { x: 0.6, y: 1.2, w: 5.85, h: 4.6 };
+  const finalArea = { x: 6.85, y: 1.2, w: 5.85, h: 4.6 };
+
+  addPhotoBox(s, draftArea);
+  addPhotoBox(s, finalArea);
+
+  addTextPanel(
+    s,
+    draftArea,
+    "Texte initial (FR)",
+    photo.draftFr,
+    1050,
+  );
+
   s.addText(buildHighlightedRuns(photo), {
-    ...layout.etape5Text,
+    x: finalArea.x + layout.textPad,
+    y: finalArea.y + 0.45,
+    w: finalArea.w - layout.textPad * 2,
+    h: finalArea.h - 0.55,
     fontFace: "Aptos",
-    fontSize: 19,
+    fontSize: 16,
     color: "0F172A",
     valign: "top",
   });
+
+  addHeading(
+    s,
+    finalArea.x + layout.textPad,
+    finalArea.y + 0.12,
+    finalArea.w - layout.textPad * 2,
+    0.28,
+    "Texte corrigé (FR)",
+  );
 
   s.addShape("roundRect", {
     x: 0.6,
