@@ -267,13 +267,13 @@ export function DiffReadOnly({
           {isInteractiveHighlightMode ? (
             <>
               <p><span className="diff-hl-grammar">{t('文法は黄色でハイライト', 'Je souligne la grammaire en jaune')}</span></p>
-              <p><span className="diff-hl-known">{t('知っている語はピンクでハイライト', 'Je souligne les mots que je connais en rose')}</span></p>
+              <p><span className="diff-hl-known">{t('知っている語の誤りはピンクでハイライト', 'Je souligne en rose les erreurs sur des mots deja connus')}</span></p>
               <p><span className="diff-hl-unknown">{t('覚えたい語は青でハイライト', 'Je souligne les mots utiles, que je ne connais pas, en bleu')}</span></p>
             </>
           ) : (
             <>
               <p><span className="diff-hl-grammar">{t('文法は黄色でハイライト', 'Je souligne la grammaire en jaune')}</span></p>
-              <p><span className="diff-hl-known">{t('知っている語はピンクでハイライト', 'Je souligne les mots que je connais en rose')}</span></p>
+              <p><span className="diff-hl-known">{t('知っている語の誤りはピンクでハイライト', 'Je souligne en rose les erreurs sur des mots deja connus')}</span></p>
               <p><span className="diff-hl-unknown">{t('覚えたい語は青でハイライト', 'Je souligne les mots utiles, que je ne connais pas, en bleu')}</span></p>
             </>
           )}

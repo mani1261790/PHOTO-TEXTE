@@ -248,10 +248,11 @@ export async function suggestHighlightColors(params: {
           'Return strict JSON only with keys grammarWords, knownWords, unknownWords.',
           'Each value must be an array of lowercase normalized French words chosen only from the supplied finalWords list.',
           'Do not include the same word in multiple arrays.',
-          'grammarWords: words whose correction is mainly grammatical glue, agreement, article, pronoun, preposition, auxiliary, inflection, or syntax support.',
-          'knownWords: lexical words likely understandable or reusable for the learner at the target CEFR, especially if already present in the draft.',
-          'unknownWords: lexical words likely above the learner CEFR or strong vocabulary-study targets.',
-          'Prefer classifying changedWords first. Use unchanged words only when they are clearly good vocabulary-study targets.'
+          'Only classify words that are part of a correction in finalFr, with strong preference for changedWords.',
+          'grammarWords: corrected words whose change is mainly grammatical glue, agreement, article, pronoun, preposition, auxiliary, inflection, or syntax support.',
+          'knownWords: corrected lexical words likely within the learner CEFR, especially words the learner should already know but used incorrectly.',
+          'unknownWords: corrected lexical words likely above the learner CEFR or strong vocabulary-study targets.',
+          'If a word is not clearly part of a correction, leave it out.'
         ].join(' ')
       },
       {
