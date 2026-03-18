@@ -19,6 +19,12 @@ type LearningNoteOptions = {
   maxNotes?: number;
 };
 
+export type HighlightSuggestion = {
+  knownWords: string[];
+  unknownWords: string[];
+  grammarWords: string[];
+};
+
 function getOpenAIClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
@@ -29,6 +35,21 @@ function getOpenAIClient(): OpenAI | null {
 
 function parseOutput(outputText: string): string {
   return outputText.replace(/^```[a-z]*\n?/i, '').replace(/```$/i, '').trim();
+}
+
+function uniqueNormalized(words: string[]): string[] {
+  return [...new Set(words.map((word) => word.trim().toLowerCase()).filter(Boolean))];
+}
+
+function parseJsonObject<T>(outputText: string): T | null {
+  const text = parseOutput(outputText);
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 }
 
 export async function translateFrToJa(draftFr: string): Promise<string> {
@@ -188,4 +209,83 @@ export async function generateLearningNotes(
   });
 
   return parseLearningNotes(response.output_text || '').slice(0, maxNotes);
+}
+
+export async function suggestHighlightColors(params: {
+  draftFr: string;
+  finalFr: string;
+  cefrLevel: CEFRLevel;
+  finalWords: string[];
+  changedWords: string[];
+  baseline: HighlightSuggestion;
+}): Promise<HighlightSuggestion | null> {
+  const client = getOpenAIClient();
+  if (!client) {
+    return null;
+  }
+
+  const finalWords = uniqueNormalized(params.finalWords);
+  if (!finalWords.length) {
+    return null;
+  }
+
+  const allowed = new Set(finalWords);
+  const changedWords = uniqueNormalized(params.changedWords).filter((word) => allowed.has(word));
+  const baseline = {
+    grammarWords: uniqueNormalized(params.baseline.grammarWords).filter((word) => allowed.has(word)),
+    knownWords: uniqueNormalized(params.baseline.knownWords).filter((word) => allowed.has(word)),
+    unknownWords: uniqueNormalized(params.baseline.unknownWords).filter((word) => allowed.has(word))
+  };
+
+  const response = await client.responses.create({
+    model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+    store: false,
+    input: [
+      {
+        role: 'system',
+        content: [
+          'You are classifying words in a final French sentence for pre-filled correction highlights.',
+          'Return strict JSON only with keys grammarWords, knownWords, unknownWords.',
+          'Each value must be an array of lowercase normalized French words chosen only from the supplied finalWords list.',
+          'Do not include the same word in multiple arrays.',
+          'grammarWords: words whose correction is mainly grammatical glue, agreement, article, pronoun, preposition, auxiliary, inflection, or syntax support.',
+          'knownWords: lexical words likely understandable or reusable for the learner at the target CEFR, especially if already present in the draft.',
+          'unknownWords: lexical words likely above the learner CEFR or strong vocabulary-study targets.',
+          'Prefer classifying changedWords first. Use unchanged words only when they are clearly good vocabulary-study targets.'
+        ].join(' ')
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          cefrLevel: params.cefrLevel,
+          draftFr: params.draftFr,
+          finalFr: params.finalFr,
+          finalWords,
+          changedWords,
+          baseline
+        })
+      }
+    ]
+  });
+
+  const parsed = parseJsonObject<Partial<HighlightSuggestion>>(response.output_text || '');
+  if (!parsed) {
+    return null;
+  }
+
+  const unknownWords = uniqueNormalized(parsed.unknownWords ?? []).filter((word) => allowed.has(word));
+  const grammarBlocked = new Set(unknownWords);
+  const grammarWords = uniqueNormalized(parsed.grammarWords ?? []).filter(
+    (word) => allowed.has(word) && !grammarBlocked.has(word)
+  );
+  const knownBlocked = new Set([...unknownWords, ...grammarWords]);
+  const knownWords = uniqueNormalized(parsed.knownWords ?? []).filter(
+    (word) => allowed.has(word) && !knownBlocked.has(word)
+  );
+
+  return {
+    grammarWords,
+    knownWords,
+    unknownWords
+  };
 }

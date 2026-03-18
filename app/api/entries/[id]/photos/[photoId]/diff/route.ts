@@ -4,6 +4,7 @@ import { badRequest } from "@/lib/api/errors";
 import { handleApiError, ok } from "@/lib/api/response";
 import { highlightUnknownWords } from "@/lib/cefr/vocab";
 import { computeReadOnlyDiff } from "@/lib/diff/read-only";
+import { buildLearningHighlightsWithAI } from "@/lib/learning/highlight";
 import { authedClient } from "@/lib/supabase/authed";
 
 export async function GET(
@@ -45,11 +46,17 @@ export async function GET(
     }
 
     const diff = computeReadOnlyDiff(photo.draft_fr, photo.final_fr);
+    const learningHighlights = await buildLearningHighlightsWithAI(
+      photo.draft_fr ?? "",
+      photo.final_fr ?? "",
+      profile.cefr_level,
+    );
 
     return ok({
       entry_id: entryId,
       photo_id: photoId,
       diff,
+      learning_highlights: learningHighlights,
       draft_highlights: highlightUnknownWords(
         photo.draft_fr,
         profile.cefr_level,

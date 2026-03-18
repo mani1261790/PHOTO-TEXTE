@@ -62,7 +62,18 @@ export function DiffReadOnly({
     [tokens]
   );
 
-  const grammarSet = new Set(grammarWords.map(normalizeWord));
+  const grammarSet = useMemo(
+    () => new Set(grammarWords.map(normalizeWord).filter(Boolean)),
+    [grammarWords]
+  );
+  const knownSet = useMemo(
+    () => new Set(knownWords.map(normalizeWord).filter(Boolean)),
+    [knownWords]
+  );
+  const unknownSet = useMemo(
+    () => new Set(unknownWords.map(normalizeWord).filter(Boolean)),
+    [unknownWords]
+  );
 
   useEffect(() => {
     setWordClassByKey({});
@@ -149,6 +160,15 @@ export function DiffReadOnly({
     setWordClass(overrideKey, getNextClassName(currentClassName));
   }
 
+  function getDefaultClassName(part: string, fallbackClassName: HighlightClassName) {
+    const key = normalizeWord(part);
+    if (!key) return '';
+    if (unknownSet.has(key)) return 'diff-hl-unknown';
+    if (grammarSet.has(key)) return 'diff-hl-grammar';
+    if (knownSet.has(key)) return 'diff-hl-known';
+    return fallbackClassName;
+  }
+
   function renderInteractivePart(
     part: string,
     overrideKey: string,
@@ -209,14 +229,14 @@ export function DiffReadOnly({
           if (isInteractiveHighlightMode) {
             if (token.kind === 'remove') return null;
 
-            const defaultClassName: HighlightClassName =
+            const fallbackClassName: HighlightClassName =
               token.kind === 'add' ? 'diff-hl-grammar' : '';
 
             return splitPreserveSpaces(token.value).map((part, partIdx) =>
               renderInteractivePart(
                 part,
                 `${idx}-${partIdx}`,
-                isWhitespace(part) ? '' : defaultClassName
+                isWhitespace(part) ? '' : getDefaultClassName(part, fallbackClassName)
               )
             );
           }
@@ -237,11 +257,7 @@ export function DiffReadOnly({
           }
 
           return splitPreserveSpaces(token.value).map((part, partIdx) => {
-            const key = normalizeWord(part);
-            let className: HighlightClassName = '';
-            if (key && grammarSet.has(key)) className = 'diff-hl-grammar';
-
-            return renderInteractivePart(part, `${idx}-${partIdx}`, className);
+            return renderInteractivePart(part, `${idx}-${partIdx}`, getDefaultClassName(part, ''));
           });
         })}
       </pre>

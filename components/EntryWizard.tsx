@@ -8,7 +8,7 @@ import { apiFetch } from "@/lib/api/fetcher";
 import { getAccessToken } from "@/lib/auth/token-store";
 import { useLanguage } from "@/components/LanguageProvider";
 import { DiffReadOnly } from "@/components/DiffReadOnly";
-import { buildLearningHighlights } from "@/lib/learning/highlight";
+import { buildLearningHighlights, LearningHighlights } from "@/lib/learning/highlight";
 import { DiffToken } from "@/lib/diff/read-only";
 import { CEFRLevel } from "@/lib/types";
 
@@ -64,6 +64,7 @@ type PhotoDiff = {
   diff: {
     tokens: DiffToken[];
   };
+  learning_highlights?: LearningHighlights;
 };
 
 const statusIndex: Record<EntryStatus, number> = {
@@ -140,7 +141,16 @@ export function EntryWizard({ id }: { id: string }) {
   const memoAutoRequestedRef = useRef<string | null>(null);
   const [diffLoadingId, setDiffLoadingId] = useState<string | null>(null);
   const [diffByPhotoId, setDiffByPhotoId] = useState<
-    Record<string, { draft: string; final: string; tokens: DiffToken[] }>
+    Record<
+      string,
+      {
+        draft: string;
+        final: string;
+        tokens: DiffToken[];
+        learningHighlights: LearningHighlights;
+        cefrLevel: CEFRLevel;
+      }
+    >
   >({});
   const [diffErrorByPhotoId, setDiffErrorByPhotoId] = useState<
     Record<string, string>
@@ -175,12 +185,21 @@ export function EntryWizard({ id }: { id: string }) {
 
   const activeLearningHighlights = useMemo(() => {
     if (!activePhoto?.final_fr) return { knownWords: [], unknownWords: [], grammarWords: [] };
+    const cached = activePhoto ? diffByPhotoId[activePhoto.id]?.learningHighlights : null;
+    const cachedLevel = activePhoto ? diffByPhotoId[activePhoto.id]?.cefrLevel : null;
+    if (cached && cachedLevel === (profile?.cefr_level ?? "A2")) return cached;
     return buildLearningHighlights(
       activePhoto.draft_fr ?? "",
       activePhoto.final_fr ?? "",
       profile?.cefr_level ?? "A2",
     );
-  }, [activePhoto?.id, activePhoto?.draft_fr, activePhoto?.final_fr, profile?.cefr_level]);
+  }, [
+    activePhoto?.id,
+    activePhoto?.draft_fr,
+    activePhoto?.final_fr,
+    diffByPhotoId,
+    profile?.cefr_level,
+  ]);
 
   const progress = useMemo(() => {
     if (!photos.length) return 0;
@@ -412,8 +431,14 @@ export function EntryWizard({ id }: { id: string }) {
 
     const draft = activePhoto.draft_fr ?? "";
     const final = activePhoto.final_fr ?? "";
+    const cefrLevel = profile?.cefr_level ?? "A2";
     const cached = diffByPhotoId[activePhoto.id];
-    if (cached && cached.draft === draft && cached.final === final) return;
+    if (
+      cached &&
+      cached.draft === draft &&
+      cached.final === final &&
+      cached.cefrLevel === cefrLevel
+    ) return;
 
     setDiffLoadingId(activePhoto.id);
     setDiffErrorByPhotoId((prev) => {
@@ -426,7 +451,15 @@ export function EntryWizard({ id }: { id: string }) {
       .then((res) => {
         setDiffByPhotoId((prev) => ({
           ...prev,
-          [activePhoto.id]: { draft, final, tokens: res.diff.tokens },
+          [activePhoto.id]: {
+            draft,
+            final,
+            tokens: res.diff.tokens,
+            cefrLevel,
+            learningHighlights:
+              res.learning_highlights ??
+              buildLearningHighlights(draft, final, cefrLevel),
+          },
         }));
       })
       .catch((err) => {
@@ -440,7 +473,7 @@ export function EntryWizard({ id }: { id: string }) {
           current === activePhoto.id ? null : current,
         );
       });
-  }, [activePhoto?.id, activePhoto?.draft_fr, activePhoto?.final_fr, id]);
+  }, [activePhoto?.id, activePhoto?.draft_fr, activePhoto?.final_fr, id, profile?.cefr_level]);
 
   async function updateEntryTitle(nextTitle: string) {
     if (!entry) return;
