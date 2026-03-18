@@ -34,20 +34,19 @@ flowchart TD
     E3 --> E4[Storage保存 + assets登録]
 
     E4 --> F{新規エントリー作成種別}
-    F -- 複数写真 --> G[/api/entries/multi]
-    G --> G1{photo_asset_id重複なし?}
+    F -- 複数写真 --> G["/api/entries/multi"]
+    G --> G1{"photo_asset_id重複なし?"}
     G1 -- No --> X3[DUPLICATE_PHOTO]
     G1 -- Yes --> G2{asset存在 & 所有者一致?}
     G2 -- No --> X4[ASSET_NOT_FOUND / ASSET_FORBIDDEN]
-    G2 -- Yes --> G3[entries作成 status=DRAFT_FR]
-    G3 --> G4{旧スキーマで NOT NULL 制約?
-    （photo_asset_id）}
+    G2 -- Yes --> G3["entries作成 status=DRAFT_FR"]
+    G3 --> G4{"旧スキーマで NOT NULL 制約?<br/>（photo_asset_id）"}
     G4 -- Yes --> G5[先頭写真で互換insertリトライ]
     G4 -- No --> G6[entry_photosをposition順でinsert]
     G5 --> G6
 
-    F -- 単写真(互換) --> H[/api/entries]
-    H --> H1[entries作成 status=DRAFT_FR]
+    F -- 単写真(互換) --> H["/api/entries"]
+    H --> H1["entries作成 status=DRAFT_FR"]
 
     G6 --> I[編集フェーズ]
     H1 --> I
@@ -61,7 +60,7 @@ flowchart TD
     J --> J1{レート制限内?}
     J1 -- No --> X1
     J1 -- Yes --> J2{対象存在 & 所有者一致?}
-    J2 -- No --> X6[ENTRY(_PHOTO)_NOT_FOUND]
+    J2 -- No --> X6["ENTRY(_PHOTO)_NOT_FOUND"]
     J2 -- Yes --> J3{draft更新可能状態?}
     J3 -- No --> X5
     J3 -- Yes --> J4[FR→JA 翻訳]
@@ -86,8 +85,7 @@ flowchart TD
     K8 --> K9{生成結果が空でない?}
     K9 -- No --> X9
     K9 -- Yes --> K10[jp_intent/final_fr保存]
-    K10 --> K11[FINAL_FR_READYへ確定
-    （単写真旧APIはJP_INTENT_LOCKEDを経由して即FINAL_FR_READY）]
+    K10 --> K11["FINAL_FR_READYへ確定<br/>（単写真旧APIはJP_INTENT_LOCKEDを経由して即FINAL_FR_READY）"]
 
     K7 --> L[差分表示 API]
     K11 --> L
@@ -110,13 +108,13 @@ flowchart TD
     N1 -- Yes --> N2[runExportWorkflow]
 
     N2 --> N3{複数写真モード?}
-    N3 -- Yes --> N4{全photoで jp_auto/jp_intent/final_fr あり?}
-    N4 -- No --> X11[ENTRY_NOT_READY]
-    N4 -- Yes --> N5{全photo statusが FINAL_FR_READY or EXPORTED ?}
+    N3 -- Yes --> N4{"全photoで jp_auto/jp_intent/final_fr あり?"}
+    N4 -- No --> X11["ENTRY_NOT_READY"]
+    N4 -- Yes --> N5{"全photo statusが FINAL_FR_READY or EXPORTED ?"}
     N5 -- No --> X12[ENTRY_STATUS]
     N5 -- Yes --> N8[assets解決・署名URL取得・画像読込]
 
-    N3 -- No --> N6{entryに jp_auto/jp_intent/final_fr/photo_asset_id あり?}
+    N3 -- No --> N6{"entryに jp_auto/jp_intent/final_fr/photo_asset_id あり?"}
     N6 -- No --> X11
     N6 -- Yes --> N7{entry statusが FINAL_FR_READY or EXPORTED ?}
     N7 -- No --> X12
@@ -129,18 +127,17 @@ flowchart TD
     N11 --> N12
 
     N12 --> N13[exportsバケットへ保存 + token_hash登録]
-    N13 --> N14[状態更新:
-    複数写真はFINAL_FR_READYのみEXPORTEDへ / 単写真はentryをEXPORTEDへ]
+    N13 --> N14["状態更新:<br/>複数写真はFINAL_FR_READYのみEXPORTEDへ / 単写真はentryをEXPORTEDへ"]
     N14 --> O[トークン付きDL URL返却]
 
-    O --> P[/api/exports/:token/download]
+    O --> P["/api/exports/:token/download"]
     P --> P1{token_hash一致?}
     P1 -- No --> X13[EXPORT_NOT_FOUND]
     P1 -- Yes --> P2{有効期限内?}
     P2 -- No --> X14[EXPORT_EXPIRED]
     P2 -- Yes --> P3[PPTXダウンロード返却]
 
-    Q[Vercel Cron: /api/internal/supabase-keepalive] --> Q1{Bearer CRON_SECRET一致?}
+    Q["Vercel Cron: /api/internal/supabase-keepalive"] --> Q1{"Bearer CRON_SECRET一致?"}
     Q1 -- No --> X15[401 UNAUTHORIZED]
     Q1 -- Yes --> Q2[user_profilesをhead select]
     Q2 --> Q3[ok:true返却]
