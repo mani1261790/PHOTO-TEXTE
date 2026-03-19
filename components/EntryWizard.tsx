@@ -144,6 +144,7 @@ export function EntryWizard({ id }: { id: string }) {
   const [memoSavedAt, setMemoSavedAt] = useState<number | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const memoAutoRequestedRef = useRef<string | null>(null);
+  const memoSavePromiseRef = useRef<Promise<void> | null>(null);
   const [diffLoadingId, setDiffLoadingId] = useState<string | null>(null);
   const [diffByPhotoId, setDiffByPhotoId] = useState<
     Record<
@@ -667,40 +668,53 @@ export function EntryWizard({ id }: { id: string }) {
   }
 
   async function saveSelfNote(content: string) {
-    const trimmed = content.trim();
-    const selfNote = memos.find((m) => m.memo_type === "SELF_NOTE");
+    const run = (async () => {
+      const trimmed = content.trim();
+      const selfNote = memos.find((m) => m.memo_type === "SELF_NOTE");
 
-    setMemoSaving(true);
-    setError(null);
-    try {
-      if (!trimmed) {
+      setMemoSaving(true);
+      setError(null);
+      try {
+        if (!trimmed) {
+          if (selfNote) {
+            await apiFetch(`/api/memos/${selfNote.id}`, { method: "DELETE", body: "{}" });
+          }
+          await loadAll();
+          setMemoPendingSave(false);
+          setMemoSavedAt(Date.now());
+          return;
+        }
+
         if (selfNote) {
-          await apiFetch(`/api/memos/${selfNote.id}`, { method: "DELETE", body: "{}" });
+          await apiFetch(`/api/memos/${selfNote.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ content: trimmed }),
+          });
+        } else {
+          await apiFetch(`/api/entries/${id}/memos`, {
+            method: "POST",
+            body: JSON.stringify({ memo_type: "SELF_NOTE", content: trimmed }),
+          });
         }
         await loadAll();
         setMemoPendingSave(false);
         setMemoSavedAt(Date.now());
-        return;
+      } catch (err) {
+        setError((err as Error).message);
+        throw err;
+      } finally {
+        setMemoSaving(false);
       }
+    })();
 
-      if (selfNote) {
-        await apiFetch(`/api/memos/${selfNote.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ content: trimmed }),
-        });
-      } else {
-        await apiFetch(`/api/entries/${id}/memos`, {
-          method: "POST",
-          body: JSON.stringify({ memo_type: "SELF_NOTE", content: trimmed }),
-        });
-      }
-      await loadAll();
-      setMemoPendingSave(false);
-      setMemoSavedAt(Date.now());
-    } catch (err) {
-      setError((err as Error).message);
+    memoSavePromiseRef.current = run;
+
+    try {
+      await run;
     } finally {
-      setMemoSaving(false);
+      if (memoSavePromiseRef.current === run) {
+        memoSavePromiseRef.current = null;
+      }
     }
   }
 
@@ -718,6 +732,12 @@ export function EntryWizard({ id }: { id: string }) {
     setBusy(true);
     setError(null);
     try {
+      if (memoSavePromiseRef.current) {
+        await memoSavePromiseRef.current;
+      } else if (memoPendingSave) {
+        await saveSelfNote(memoDraft);
+      }
+
       const result = await apiFetch<{ token: string }>(
         `/api/entries/${id}/export/pptx`,
         {
