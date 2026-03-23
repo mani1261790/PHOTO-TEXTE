@@ -68,4 +68,46 @@ describe('pptx export privacy', () => {
     expect(etape5Slide?.xml).toContain('calmement');
     expect(etape5Slide?.xml).toContain('parc.');
   });
+
+  it('enables text autofit for long PPTX body content without truncating the text', async () => {
+    const longFinal = 'Je raconte en detail cette photo avec beaucoup de phrases utiles et de vocabulaire. '.repeat(40).trim();
+    const longBullet = 'Je retiens une formulation plus precise pour decrire une scene et organiser mon texte avec plus de nuances. '.repeat(16).trim();
+
+    const buffer = await generatePhotoTextePptx({
+      titleFr: 'Mon titre',
+      photos: [
+        {
+          position: 1,
+          draftFr: longFinal,
+          jpAuto: '自動翻訳です。',
+          jpIntent: '意図を整えた日本語です。',
+          finalFr: longFinal,
+        },
+      ],
+      learningBullets: [longBullet],
+    });
+
+    const zip = await JSZip.loadAsync(buffer);
+    const slideNames = Object.keys(zip.files).filter((name) => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'));
+    const slides = await Promise.all(
+      slideNames.map(async (name) => ({
+        name,
+        xml: await zip.file(name)!.async('string'),
+      })),
+    );
+
+    const etape3Slide = slides.find((slide) =>
+      slide.xml.includes('étape 3. Mon texte photo 1 en français')
+    );
+    const learningSlide = slides.find((slide) =>
+      slide.xml.includes('Qu’est-ce que j’ai appris avec ce Mon titre ?')
+    );
+
+    expect(etape3Slide?.xml).toContain('<a:normAutofit/>');
+    expect(etape3Slide?.xml).toContain('beaucoup de phrases utiles');
+    expect(etape3Slide?.xml).not.toContain('…');
+
+    expect(learningSlide?.xml).toContain('<a:normAutofit/>');
+    expect(learningSlide?.xml).toContain('organiser mon texte avec plus de nuances');
+  });
 });

@@ -74,19 +74,19 @@ function fitText(
   value: string,
   baseSize: number,
   maxChars: number,
+  minSize = 10,
 ): { text: string; size: number } {
   const clean = (value ?? "").trim();
-  if (clean.length <= maxChars) {
+  const lineCount = Math.max(1, clean.split(/\r?\n/).length);
+  const effectiveLength = clean.length + (lineCount - 1) * Math.round(maxChars * 0.35);
+
+  if (effectiveLength <= maxChars) {
     return { text: clean || " ", size: baseSize };
   }
 
-  const ratio = maxChars / clean.length;
-  const computed = Math.max(14, Math.floor(baseSize * ratio));
-  if (computed > 14) {
-    return { text: clean, size: computed };
-  }
-
-  return { text: `${clean.slice(0, Math.max(0, maxChars - 1))}…`, size: 14 };
+  const ratio = maxChars / effectiveLength;
+  const computed = Math.max(minSize, Math.floor(baseSize * ratio));
+  return { text: clean || " ", size: computed };
 }
 
 function addSlideTitle(slide: PptxGenJS.Slide, value: string) {
@@ -146,6 +146,7 @@ function addTextPanel(
         ? "Yu Gothic"
         : "Aptos",
     fontSize: fitted.size,
+    fit: "shrink",
     valign: "top",
     color: "0F172A",
   });
@@ -415,13 +416,15 @@ function addEtape5ComparisonSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
     1050,
   );
 
+  const fittedFinal = fitText(photo.finalFr, 16, 1050, 10);
   s.addText(buildHighlightedRuns(photo), {
     x: finalArea.x + layout.textPad,
     y: finalArea.y + 0.45,
     w: finalArea.w - layout.textPad * 2,
     h: finalArea.h - 0.55,
     fontFace: "Aptos",
-    fontSize: 16,
+    fontSize: fittedFinal.size,
+    fit: "shrink",
     color: "0F172A",
     valign: "top",
   });
@@ -497,6 +500,7 @@ function addLearningSlide(pptx: PptxGenJS, titleFr: string, bullets: string[]) {
       ...layout.learningBody,
       fontFace: "Aptos",
       fontSize: 22,
+      fit: "shrink",
       color: "64748B",
       valign: "top",
     });
@@ -504,10 +508,13 @@ function addLearningSlide(pptx: PptxGenJS, titleFr: string, bullets: string[]) {
   }
 
   // Use a single text box with bullets; keep within slide.
-  s.addText(bullets.map((b) => `• ${b}`).join("\n"), {
+  const learningText = bullets.map((b) => `• ${b}`).join("\n");
+  const fittedLearning = fitText(learningText, 22, 1100, 11);
+  s.addText(fittedLearning.text, {
     ...layout.learningBody,
     fontFace: "Aptos",
-    fontSize: 22,
+    fontSize: fittedLearning.size,
+    fit: "shrink",
     color: "0F172A",
     valign: "top",
   });
