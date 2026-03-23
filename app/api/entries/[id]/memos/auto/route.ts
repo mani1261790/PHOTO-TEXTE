@@ -3,24 +3,13 @@ import { NextRequest } from 'next/server';
 import { generateLearningNotes } from '@/lib/ai/client';
 import { badRequest } from '@/lib/api/errors';
 import { handleApiError, ok } from '@/lib/api/response';
-import { highlightUnknownWords } from '@/lib/cefr/vocab';
+import {
+  buildLearningHighlightsFromDiff,
+  buildLearningHighlightsWithAI,
+  normalizeLearningHighlights,
+} from '@/lib/learning/highlight';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
 import { authedClient } from '@/lib/supabase/authed';
-import { CEFRLevel } from '@/lib/types';
-
-function collectUnknownWords(texts: string[], level: CEFRLevel): string[] {
-  const words = new Map<string, string>();
-  for (const text of texts) {
-    const tokens = highlightUnknownWords(text, level);
-    for (const token of tokens) {
-      if (!token.unknown || !token.lemma || !token.meaning) continue;
-      if (!words.has(token.lemma)) {
-        words.set(token.lemma, token.meaning);
-      }
-    }
-  }
-  return [...words.entries()].map(([lemma, meaning]) => `${lemma} (${meaning})`);
-}
 
 export async function GET(
   req: NextRequest,
@@ -39,7 +28,7 @@ export async function GET(
       client.from('entries').select('*').eq('id', entryId).single(),
       client
         .from('entry_photos')
-        .select('draft_fr,final_fr')
+        .select('draft_fr,final_fr,learning_highlights')
         .eq('entry_id', entryId)
         .order('position', { ascending: true }),
       client
@@ -61,29 +50,68 @@ export async function GET(
 
     const pairs =
       photos && photos.length
-        ? photos
+        ? await Promise.all(photos
             .filter((p) => (p.final_fr ?? '').trim())
-            .map((p) => ({
+            .map(async (p) => {
+              const baseHighlights =
+                normalizeLearningHighlights(p.learning_highlights) ??
+                await buildLearningHighlightsWithAI(
+                  p.draft_fr ?? '',
+                  p.final_fr ?? '',
+                  profile.cefr_level,
+                );
+
+              const highlights = buildLearningHighlightsFromDiff(
+                p.draft_fr ?? '',
+                p.final_fr ?? '',
+                baseHighlights,
+              );
+
+              return {
               draftFr: p.draft_fr ?? '',
-              finalFr: p.final_fr ?? ''
+              finalFr: p.final_fr ?? '',
+              highlights: {
+                grammarWords: highlights.grammarWords,
+                knownWords: highlights.knownWords,
+                unknownWords: highlights.unknownWords,
+              },
+            };
             }))
         : entry.final_fr
-          ? [
-              {
+          ? [await (async () => {
+              const baseHighlights =
+                normalizeLearningHighlights(entry.learning_highlights) ??
+                await buildLearningHighlightsWithAI(
+                  entry.draft_fr ?? '',
+                  entry.final_fr ?? '',
+                  profile.cefr_level,
+                );
+
+              const highlights = buildLearningHighlightsFromDiff(
+                entry.draft_fr ?? '',
+                entry.final_fr ?? '',
+                baseHighlights,
+              );
+
+              return {
                 draftFr: entry.draft_fr ?? '',
-                finalFr: entry.final_fr ?? ''
-              }
-            ]
+                finalFr: entry.final_fr ?? '',
+                highlights: {
+                  grammarWords: highlights.grammarWords,
+                  knownWords: highlights.knownWords,
+                  unknownWords: highlights.unknownWords,
+                },
+              };
+            })()]
           : [];
 
     if (!pairs.length) {
       return ok({ suggestions: [] });
     }
 
-    const unknownWords = collectUnknownWords(
-      pairs.map((p) => p.finalFr),
-      profile.cefr_level
-    );
+    const unknownWords = [...new Set(
+      pairs.flatMap((pair) => pair.highlights?.unknownWords ?? [])
+    )];
 
     const suggestions = await generateLearningNotes(
       pairs,

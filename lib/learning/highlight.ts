@@ -201,7 +201,7 @@ export function buildEffectiveLearningHighlights(
     const token = tokens[index];
     if (token.kind === "remove") continue;
 
-    const fallbackKind: SavedHighlightKind = token.kind === "add" ? "grammar" : "none";
+    const fallbackKind: SavedHighlightKind = "none";
     const parts = splitLearningText(token.value);
     for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
       const part = parts[partIndex];
@@ -313,6 +313,7 @@ export function buildLearningHighlights(
 ): LearningHighlights {
   const changedFinalWords = new Set<string>();
   const grammarSet = new Set<string>();
+  const draftWordSet = new Set(words(draftFr ?? ""));
 
   const parts = diffWords(draftFr ?? "", finalFr ?? "");
   for (let index = 0; index < parts.length; index += 1) {
@@ -342,7 +343,7 @@ export function buildLearningHighlights(
     highlightUnknownWords(finalFr, cefrLevel)
       .filter((t) => t.unknown)
       .map((t) => normalizeLearningWord(t.token))
-      .filter((word) => Boolean(word) && changedFinalWords.has(word)),
+      .filter((word) => Boolean(word) && changedFinalWords.has(word) && !draftWordSet.has(word)),
   );
 
   const knownSet = new Set<string>();
@@ -417,12 +418,13 @@ export async function buildLearningHighlightsWithAI(
       draftFr,
       finalFr,
       cefrLevel,
+      draftWords: unique(words(draftFr)),
       finalWords,
       changedWords,
       baseline,
     });
 
-    return mergeHighlightSuggestions(baseline, suggestion);
+    return suggestion ?? baseline;
   } catch {
     return baseline;
   }

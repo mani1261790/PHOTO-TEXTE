@@ -256,8 +256,8 @@ export function DiffReadOnly({
       <p className="badge diff-instruction-badge">
         {isInteractiveHighlightMode
           ? t(
-              '最終文だけを表示しています。訂正語は最初だけ黄色。単語をタップで無色→黄→ピンク→青→無色、押したままなぞると複数語をまとめて変更。',
-              'Seul le texte final est affiche. Les mots corriges commencent en jaune. Touchez pour faire tourner sans couleur -> jaune -> rose -> bleu -> sans couleur. Glissez pour appliquer a plusieurs mots.'
+              '最終文だけを表示しています。学習対象だけ自動で色付けします。単語をタップで無色→黄→ピンク→青→無色、押したままなぞると複数語をまとめて変更。',
+              'Seul le texte final est affiche. Seules les cibles d’apprentissage sont colorees automatiquement. Touchez pour faire tourner sans couleur -> jaune -> rose -> bleu -> sans couleur. Glissez pour appliquer a plusieurs mots.'
             )
           : t('操作不可', 'Non modifiable')}
       </p>
@@ -269,8 +269,7 @@ export function DiffReadOnly({
           if (isInteractiveHighlightMode) {
             if (token.kind === 'remove') return null;
 
-            const fallbackKind: SavedHighlightKind =
-              token.kind === 'add' ? 'grammar' : 'none';
+            const fallbackKind: SavedHighlightKind = 'none';
 
             return splitLearningText(token.value).map((part, partIdx) =>
               renderInteractivePart(

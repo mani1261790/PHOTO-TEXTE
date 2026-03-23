@@ -11,6 +11,7 @@ type Constraints = {
 type LearningNotePair = {
   draftFr: string;
   finalFr: string;
+  highlights?: HighlightSuggestion;
 };
 
 type LearningNoteOptions = {
@@ -134,6 +135,8 @@ function buildLearningNotesInstruction(
     `Grammatical gender: ${constraints.grammaticalGender}.`,
     politeness,
     `Write the notes in ${lang}.`,
+    'Base the notes only on the highlighted learning targets provided for each photo.',
+    'Ignore corrections that are not included in the highlighted targets.',
     'Focus on grammar corrections, vocabulary/expressions, and key fixes between draft and final.',
     'Keep each bullet concise (one line).',
     'Return 4-8 bullet lines, no numbering, no extra commentary.'
@@ -157,7 +160,8 @@ export async function generateLearningNotes(
   const cleanPairs = pairs
     .map((p) => ({
       draftFr: (p.draftFr ?? '').trim(),
-      finalFr: (p.finalFr ?? '').trim()
+      finalFr: (p.finalFr ?? '').trim(),
+      highlights: p.highlights ?? { grammarWords: [], knownWords: [], unknownWords: [] }
     }))
     .filter((p) => p.draftFr && p.finalFr);
 
@@ -167,10 +171,12 @@ export async function generateLearningNotes(
 
   const client = getOpenAIClient();
   if (!client) {
-    const fallback = cleanPairs
-      .map((p) => p.finalFr)
-      .filter(Boolean)
-      .slice(0, maxNotes);
+    const fallback = cleanPairs.flatMap((p) => {
+      const grammar = p.highlights.grammarWords.map((word) => `文法: ${word}`);
+      const known = p.highlights.knownWords.map((word) => `語彙修正: ${word}`);
+      const unknown = p.highlights.unknownWords.map((word) => `覚える語: ${word}`);
+      return [...grammar, ...known, ...unknown];
+    }).slice(0, maxNotes);
     if (!fallback.length) {
       return [];
     }
@@ -182,7 +188,14 @@ export async function generateLearningNotes(
   const pairsText = cleanPairs
     .map(
       (p, idx) =>
-        `Photo ${idx + 1}\nDraft: ${p.draftFr}\nFinal: ${p.finalFr}`
+        [
+          `Photo ${idx + 1}`,
+          `Draft: ${p.draftFr}`,
+          `Final: ${p.finalFr}`,
+          `Highlighted grammar targets: ${p.highlights.grammarWords.join(', ') || '(none)'}`,
+          `Highlighted known-word corrections: ${p.highlights.knownWords.join(', ') || '(none)'}`,
+          `Highlighted unknown-word targets: ${p.highlights.unknownWords.join(', ') || '(none)'}`,
+        ].join('\n')
     )
     .join('\n\n');
 
@@ -215,6 +228,7 @@ export async function suggestHighlightColors(params: {
   draftFr: string;
   finalFr: string;
   cefrLevel: CEFRLevel;
+  draftWords: string[];
   finalWords: string[];
   changedWords: string[];
   baseline: HighlightSuggestion;
@@ -249,10 +263,12 @@ export async function suggestHighlightColors(params: {
           'Each value must be an array of lowercase normalized French words chosen only from the supplied finalWords list.',
           'Do not include the same word in multiple arrays.',
           'Only classify words that are part of a correction in finalFr, with strong preference for changedWords.',
-          'grammarWords: corrected words whose change is mainly grammatical glue, agreement, article, pronoun, preposition, auxiliary, inflection, or syntax support.',
-          'knownWords: corrected lexical words likely within the learner CEFR, especially words the learner should already know but used incorrectly.',
-          'unknownWords: corrected lexical words likely above the learner CEFR or strong vocabulary-study targets.',
-          'If a word is not clearly part of a correction, leave it out.'
+          'Use draftFr and draftWords as evidence of what the learner already knows or already tried to use.',
+          'If the learner already uses a word, root, or structure in draftFr, do not mark it unknown just because it is above target CEFR.',
+          'grammarWords: corrected words whose change is mainly grammatical glue, agreement, article, pronoun, preposition, auxiliary, inflection, or syntax support, and is still worth review for this learner.',
+          'knownWords: corrected lexical words the learner likely basically knows already, but used inaccurately.',
+          'unknownWords: corrected lexical words that are genuinely good new learning targets for this learner.',
+          'If a correction is already mastered, stylistic only, or not worth highlighting, leave it out of all arrays.'
         ].join(' ')
       },
       {
@@ -261,6 +277,7 @@ export async function suggestHighlightColors(params: {
           cefrLevel: params.cefrLevel,
           draftFr: params.draftFr,
           finalFr: params.finalFr,
+          draftWords: uniqueNormalized(params.draftWords),
           finalWords,
           changedWords,
           baseline

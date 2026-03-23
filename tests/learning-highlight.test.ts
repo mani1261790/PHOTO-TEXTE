@@ -64,7 +64,7 @@ describe("buildLearningHighlights", () => {
     );
 
     expect(result.unknownWords).toEqual(["à"]);
-    expect(result.grammarWords).toEqual(["paris"]);
+    expect(result.grammarWords).toEqual([]);
     expect(result.wordClassByKey).toEqual({ "2-0": "unknown" });
   });
 
@@ -91,5 +91,24 @@ describe("buildLearningHighlights", () => {
     expect(result.knownWords).toEqual([]);
     expect(result.unknownWords).toEqual([]);
     expect(result.wordClassByKey).toEqual({ "2-0": "none" });
+  });
+
+  it("does not auto-highlight added words when no learning target was selected", () => {
+    const draft = "Je vais a la maison.";
+    const final = "Je vais à la maison.";
+
+    const result = buildLearningHighlightsFromDiff(
+      draft,
+      final,
+      {
+        knownWords: [],
+        unknownWords: [],
+        grammarWords: [],
+      },
+    );
+
+    expect(result.grammarWords).toEqual([]);
+    expect(result.knownWords).toEqual([]);
+    expect(result.unknownWords).toEqual([]);
   });
 });

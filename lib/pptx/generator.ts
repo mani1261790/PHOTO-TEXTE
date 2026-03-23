@@ -4,7 +4,7 @@ import PptxGenJS from "pptxgenjs";
 
 import { buildLearningHighlightsFromDiff, LearningHighlights, normalizeLearningWord } from "@/lib/learning/highlight";
 
-export interface PptxPhotoInput extends LearningHighlights {
+export interface PptxPhotoInput extends Partial<LearningHighlights> {
   position: number; // 1-based
   draftFr: string;
   jpAuto: string;
@@ -373,7 +373,13 @@ function buildHighlightedRuns(photo: PptxPhotoInput): PptxGenJS.TextProps[] {
   const effectiveHighlights = buildLearningHighlightsFromDiff(
     photo.draftFr ?? "",
     photo.finalFr ?? "",
-    photo,
+    {
+      knownWords: photo.knownWords ?? [],
+      unknownWords: photo.unknownWords ?? [],
+      grammarWords: photo.grammarWords ?? [],
+      tokenSignature: photo.tokenSignature,
+      wordClassByKey: photo.wordClassByKey,
+    },
   );
   const known = new Set((effectiveHighlights.knownWords ?? []).map((w) => normalizeLearningWord(w)));
   const unknown = new Set((effectiveHighlights.unknownWords ?? []).map((w) => normalizeLearningWord(w)));
