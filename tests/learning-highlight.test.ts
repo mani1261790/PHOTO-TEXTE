@@ -67,4 +67,29 @@ describe("buildLearningHighlights", () => {
     expect(result.grammarWords).toEqual(["paris"]);
     expect(result.wordClassByKey).toEqual({ "2-0": "unknown" });
   });
+
+  it("preserves explicit none overrides instead of falling back to the default highlight", () => {
+    const draft = "Je vais a la maison.";
+    const final = "Je vais à la maison.";
+    const diff = computeReadOnlyDiff(draft, final);
+
+    const result = buildLearningHighlightsFromDiff(
+      draft,
+      final,
+      {
+        knownWords: [],
+        unknownWords: [],
+        grammarWords: ["à"],
+        tokenSignature: getLearningTokenSignature(diff.tokens),
+        wordClassByKey: {
+          "2-0": "none",
+        },
+      },
+    );
+
+    expect(result.grammarWords).toEqual([]);
+    expect(result.knownWords).toEqual([]);
+    expect(result.unknownWords).toEqual([]);
+    expect(result.wordClassByKey).toEqual({ "2-0": "none" });
+  });
 });

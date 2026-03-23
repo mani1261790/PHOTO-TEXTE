@@ -147,9 +147,7 @@ export function DiffReadOnly({
 
   function setWordClass(overrideKey: string, nextKind: SavedHighlightKind) {
     setWordClassByKey((prev) => {
-      const next = { ...prev };
-      if (nextKind === 'none') delete next[overrideKey];
-      else next[overrideKey] = nextKind;
+      const next = { ...prev, [overrideKey]: nextKind };
       emitLearningHighlights(next);
       return next;
     });
