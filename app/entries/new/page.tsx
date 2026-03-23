@@ -375,15 +375,27 @@ export default function NewEntryPage() {
   }
 
   function handleAddFilesChange(event: ChangeEvent<HTMLInputElement>) {
-    const files = event.target.files;
+    const files = event.target.files
+      ? Array.from(event.target.files)
+      : null;
     event.currentTarget.value = "";
-    void onPickFiles(files);
+    if (!files) return;
+
+    const dataTransfer = new DataTransfer();
+    files.forEach((file) => dataTransfer.items.add(file));
+    void onPickFiles(dataTransfer.files);
   }
 
   function handleReplaceFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const files = event.target.files;
+    const files = event.target.files
+      ? Array.from(event.target.files)
+      : null;
     event.currentTarget.value = "";
-    void replacePhoto(activeIndex, files);
+    if (!files) return;
+
+    const dataTransfer = new DataTransfer();
+    files.forEach((file) => dataTransfer.items.add(file));
+    void replacePhoto(activeIndex, dataTransfer.files);
   }
 
   function removePhoto(index: number) {
