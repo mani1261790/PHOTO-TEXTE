@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiFetch, apiFetchForm } from "@/lib/api/fetcher";
 import { getAccessToken } from "@/lib/auth/token-store";
@@ -158,6 +158,7 @@ export default function NewEntryPage() {
   const router = useRouter();
   const { language } = useLanguage();
   const t = (ja: string, fr: string) => (language === "fr" ? fr : ja);
+  const replaceInputRef = useRef<HTMLInputElement | null>(null);
 
   const [titleFr, setTitleFr] = useState("");
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
@@ -168,6 +169,13 @@ export default function NewEntryPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  function buildReselectPhotoMessage(photoNumber: number): string {
+    return t(
+      `写真 ${photoNumber} の読み込みまたは送信に失敗しました。もう一度この写真を選択してください。`,
+      `La lecture ou l’envoi de la photo ${photoNumber} a échoué. Veuillez sélectionner cette photo de nouveau.`,
+    );
+  }
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -328,6 +336,56 @@ export default function NewEntryPage() {
     }
   }
 
+  async function replacePhoto(index: number, fileList: FileList | null) {
+    const originalFile = fileList?.[0];
+    if (!originalFile) return;
+
+    setError(null);
+
+    const file = await maybeDownscalePhoto(originalFile).catch(() => originalFile);
+    const nextPreviewUrl = URL.createObjectURL(file);
+    setPhotos((prev) =>
+      prev.map((photo, photoIndex) => {
+        if (photoIndex !== index) return photo;
+        try {
+          URL.revokeObjectURL(photo.previewUrl);
+        } catch {
+          // no-op
+        }
+        return {
+          ...photo,
+          file,
+          previewUrl: nextPreviewUrl,
+        };
+      }),
+    );
+    setActiveIndex(index);
+  }
+
+  async function ensurePhotoReadable(photo: PhotoDraft, index: number) {
+    if (!(photo.file instanceof File) || photo.file.size <= 0) {
+      throw new Error(`PHOTO_RESELECT_REQUIRED:${index}`);
+    }
+
+    try {
+      await photo.file.slice(0, Math.min(photo.file.size, 32)).arrayBuffer();
+    } catch {
+      throw new Error(`PHOTO_RESELECT_REQUIRED:${index}`);
+    }
+  }
+
+  function handleAddFilesChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files;
+    event.currentTarget.value = "";
+    void onPickFiles(files);
+  }
+
+  function handleReplaceFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files;
+    event.currentTarget.value = "";
+    void replacePhoto(activeIndex, files);
+  }
+
   function removePhoto(index: number) {
     setPhotos((prev) => {
       const target = prev[index];
@@ -388,13 +446,25 @@ export default function NewEntryPage() {
       // Upload sequentially to avoid intermittent browser/network failures
       // with concurrent multipart requests (seen as "Load failed" in UI).
       const uploaded: Array<{ assetId: string; draftFr: string }> = [];
-      for (const p of photos) {
+      for (let index = 0; index < photos.length; index += 1) {
+        const p = photos[index];
+        await ensurePhotoReadable(p, index);
+
         const form = new FormData();
         form.append("file", p.file);
-        const asset = await apiFetchForm<{ id: string }>(
-          "/api/assets/photo",
-          form,
-        );
+        let asset: { id: string };
+        try {
+          asset = await apiFetchForm<{ id: string }>(
+            "/api/assets/photo",
+            form,
+          );
+        } catch (uploadError) {
+          const message = (uploadError as Error).message || "";
+          if (message === "Load failed") {
+            throw new Error(`PHOTO_RESELECT_REQUIRED:${index}`);
+          }
+          throw uploadError;
+        }
         uploaded.push({ assetId: asset.id, draftFr: p.draftFr });
       }
 
@@ -420,6 +490,13 @@ export default function NewEntryPage() {
       router.push(`/entries/${created.entry.id}`);
     } catch (err) {
       const message = (err as Error).message || "";
+      if (message.startsWith("PHOTO_RESELECT_REQUIRED:")) {
+        const failedIndex = Number(message.split(":")[1] ?? activeIndex);
+        const photoNumber = Number.isFinite(failedIndex) ? failedIndex + 1 : activeIndex + 1;
+        setActiveIndex(Number.isFinite(failedIndex) ? failedIndex : activeIndex);
+        setError(buildReselectPhotoMessage(photoNumber));
+        return;
+      }
       setError(
         message === "Load failed"
           ? t(
@@ -461,9 +538,7 @@ export default function NewEntryPage() {
               type="file"
               accept="image/*"
               multiple
-              onChange={(e) => {
-                void onPickFiles(e.target.files);
-              }}
+              onChange={handleAddFilesChange}
             />
             <div className="field-meta">
               {t("選択枚数:", "Nombre sélectionné :")} {photos.length}
@@ -533,7 +608,27 @@ export default function NewEntryPage() {
                     >
                       {t("この写真を削除", "Supprimer cette photo")}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => replaceInputRef.current?.click()}
+                      disabled={busy || !activePhoto}
+                    >
+                      {t("この写真を選び直す", "Sélectionner de nouveau cette photo")}
+                    </button>
+                    <input
+                      ref={replaceInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleReplaceFileChange}
+                      style={{ display: "none" }}
+                    />
                   </div>
+                  <p className="field-meta">
+                    {t(
+                      "この端末で元の写真を読み込めなくなった場合は、この写真を選び直してください。",
+                      "Si le fichier d’origine n’est plus lisible sur cet appareil, sélectionnez de nouveau cette photo.",
+                    )}
+                  </p>
                 </div>
 
                 <div className="new-entry-draft-panel">

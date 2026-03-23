@@ -1,9 +1,16 @@
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 
+import { buildPptxContentDisposition, buildPptxDownloadFilename } from '@/lib/pptx/download';
 import { generatePhotoTextePptx } from '@/lib/pptx/generator';
 
 describe('pptx export privacy', () => {
+  it('builds the PPTX download filename from the entry title', () => {
+    expect(buildPptxDownloadFilename('Mon titre')).toBe('Mon titre.pptx');
+    expect(buildPptxDownloadFilename('Bonjour / Paris: été')).toBe('Bonjour Paris été.pptx');
+    expect(buildPptxContentDisposition('Bonjour / Paris: été')).toContain("filename*=UTF-8''Bonjour%20Paris%20%C3%A9t%C3%A9.pptx");
+  });
+
   it('does not contain email or display name metadata in slides', async () => {
     const email = 'student@example.com';
     const displayName = 'Alice Example';

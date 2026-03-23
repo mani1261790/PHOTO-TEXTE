@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { badRequest } from '@/lib/api/errors';
+import { buildPptxContentDisposition } from '@/lib/pptx/download';
 import { handleApiError } from '@/lib/api/response';
 import { hashExportToken } from '@/lib/exports/token';
 import { exportBucket } from '@/lib/storage/buckets';
@@ -17,7 +18,7 @@ export async function GET(
     const hash = hashExportToken(token);
     const { data: file, error } = await service
       .from('exports')
-      .select('object_path,expires_at')
+      .select('object_path,expires_at,entry_id')
       .eq('token_hash', hash)
       .single();
 
@@ -34,13 +35,21 @@ export async function GET(
       badRequest('EXPORT_DOWNLOAD_FAILED', 'Unable to download export');
     }
 
+    const { data: entry } = file.entry_id
+      ? await service
+          .from('entries')
+          .select('title_fr')
+          .eq('id', file.entry_id)
+          .single()
+      : { data: null };
+
     const arrayBuffer = await download.data.arrayBuffer();
     return new NextResponse(Buffer.from(arrayBuffer), {
       status: 200,
       headers: {
         'Content-Type':
           'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'Content-Disposition': 'attachment; filename="photo-texte-export.pptx"'
+        'Content-Disposition': buildPptxContentDisposition(entry?.title_fr)
       }
     });
   } catch (error) {
