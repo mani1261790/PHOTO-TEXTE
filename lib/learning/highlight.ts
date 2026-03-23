@@ -1,6 +1,6 @@
 import { diffWords } from "diff";
 
-import { HighlightSuggestion, suggestHighlightColors } from "@/lib/ai/client";
+import { HighlightSuggestion, LearnerHighlightContext, suggestHighlightColors } from "@/lib/ai/client";
 import { highlightUnknownWords } from "@/lib/cefr/vocab";
 import { DiffToken, computeReadOnlyDiff } from "@/lib/diff/read-only";
 import { CEFRLevel } from "@/lib/types";
@@ -400,6 +400,7 @@ export async function buildLearningHighlightsWithAI(
   draftFr: string,
   finalFr: string,
   cefrLevel: CEFRLevel,
+  learnerContext?: LearnerHighlightContext,
 ): Promise<LearningHighlights> {
   const baseline = buildLearningHighlights(draftFr, finalFr, cefrLevel);
   const finalWords = unique(words(finalFr));
@@ -419,6 +420,8 @@ export async function buildLearningHighlightsWithAI(
       finalFr,
       cefrLevel,
       draftWords: unique(words(draftFr)),
+      learnerKnownWords: learnerContext?.knownWords ?? [],
+      learnerSampleTexts: learnerContext?.sampleTexts ?? [],
       finalWords,
       changedWords,
       baseline,

@@ -26,6 +26,11 @@ export type HighlightSuggestion = {
   grammarWords: string[];
 };
 
+export type LearnerHighlightContext = {
+  knownWords?: string[];
+  sampleTexts?: string[];
+};
+
 function getOpenAIClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
@@ -229,6 +234,8 @@ export async function suggestHighlightColors(params: {
   finalFr: string;
   cefrLevel: CEFRLevel;
   draftWords: string[];
+  learnerKnownWords?: string[];
+  learnerSampleTexts?: string[];
   finalWords: string[];
   changedWords: string[];
   baseline: HighlightSuggestion;
@@ -245,6 +252,8 @@ export async function suggestHighlightColors(params: {
 
   const allowed = new Set(finalWords);
   const changedWords = uniqueNormalized(params.changedWords).filter((word) => allowed.has(word));
+  const learnerKnownWords = uniqueNormalized(params.learnerKnownWords ?? []);
+  const learnerSampleTexts = (params.learnerSampleTexts ?? []).map((text) => text.trim()).filter(Boolean).slice(0, 12);
   const baseline = {
     grammarWords: uniqueNormalized(params.baseline.grammarWords).filter((word) => allowed.has(word)),
     knownWords: uniqueNormalized(params.baseline.knownWords).filter((word) => allowed.has(word)),
@@ -264,7 +273,9 @@ export async function suggestHighlightColors(params: {
           'Do not include the same word in multiple arrays.',
           'Only classify words that are part of a correction in finalFr, with strong preference for changedWords.',
           'Use draftFr and draftWords as evidence of what the learner already knows or already tried to use.',
+          'Use learnerKnownWords and learnerSampleTexts as stronger evidence of the learner’s actual level than CEFR alone.',
           'If the learner already uses a word, root, or structure in draftFr, do not mark it unknown just because it is above target CEFR.',
+          'If a word or structure already appears naturally in learnerSampleTexts, prefer knownWords or no highlight over unknownWords.',
           'grammarWords: corrected words whose change is mainly grammatical glue, agreement, article, pronoun, preposition, auxiliary, inflection, or syntax support, and is still worth review for this learner.',
           'knownWords: corrected lexical words the learner likely basically knows already, but used inaccurately.',
           'unknownWords: corrected lexical words that are genuinely good new learning targets for this learner.',
@@ -278,6 +289,8 @@ export async function suggestHighlightColors(params: {
           draftFr: params.draftFr,
           finalFr: params.finalFr,
           draftWords: uniqueNormalized(params.draftWords),
+          learnerKnownWords,
+          learnerSampleTexts,
           finalWords,
           changedWords,
           baseline

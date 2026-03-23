@@ -4,6 +4,7 @@ import { badRequest } from "@/lib/api/errors";
 import { handleApiError, ok } from "@/lib/api/response";
 import { highlightUnknownWords } from "@/lib/cefr/vocab";
 import { computeReadOnlyDiff } from "@/lib/diff/read-only";
+import { buildLearnerContextFromTexts } from "@/lib/learning/context";
 import {
   buildLearningHighlightsWithAI,
   normalizeLearningHighlights,
@@ -17,10 +18,12 @@ export async function GET(
   try {
     const { id: entryId, photoId } = await context.params;
     const { user, client } = await authedClient(req);
+    const refresh = req.nextUrl.searchParams.get("refresh") === "1";
 
     const [
       { data: photo, error: photoError },
       { data: profile, error: profileError },
+      { data: learnerPhotos, error: learnerPhotosError },
     ] = await Promise.all([
       client
         .from("entry_photos")
@@ -33,6 +36,12 @@ export async function GET(
         .select("cefr_level")
         .eq("id", user.id)
         .single(),
+      client
+        .from("entry_photos")
+        .select("draft_fr,final_fr")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(30),
     ]);
 
     if (photoError || !photo) {
@@ -44,17 +53,26 @@ export async function GET(
     if (profileError || !profile) {
       badRequest("PROFILE_NOT_FOUND", "Profile not found");
     }
+    if (learnerPhotosError) {
+      badRequest("ENTRY_PHOTOS_LIST_FAILED", "Unable to fetch learner context");
+    }
     if (!photo.final_fr) {
       badRequest("FINAL_TEXT_REQUIRED", "Final French text not generated yet");
     }
 
     const diff = computeReadOnlyDiff(photo.draft_fr, photo.final_fr);
+    const learnerContext = buildLearnerContextFromTexts([
+      ...(learnerPhotos ?? []).flatMap((row) => [row.draft_fr ?? "", row.final_fr ?? ""]),
+      photo.draft_fr ?? "",
+      photo.final_fr ?? "",
+    ]);
     const learningHighlights =
-      normalizeLearningHighlights(photo.learning_highlights) ??
+      (!refresh ? normalizeLearningHighlights(photo.learning_highlights) : null) ??
       await buildLearningHighlightsWithAI(
         photo.draft_fr ?? "",
         photo.final_fr ?? "",
         profile.cefr_level,
+        learnerContext,
       );
 
     return ok({

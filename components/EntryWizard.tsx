@@ -139,6 +139,7 @@ export function EntryWizard({ id }: { id: string }) {
   const [memoDraft, setMemoDraft] = useState("");
   const [memoDraftTouched, setMemoDraftTouched] = useState(false);
   const [memoAutoLoading, setMemoAutoLoading] = useState(false);
+  const [highlightRegeneratingId, setHighlightRegeneratingId] = useState<string | null>(null);
   const [memoSaving, setMemoSaving] = useState(false);
   const [memoPendingSave, setMemoPendingSave] = useState(false);
   const [memoSavedAt, setMemoSavedAt] = useState<number | null>(null);
@@ -312,8 +313,9 @@ export function EntryWizard({ id }: { id: string }) {
     setJpIntentDraftByPhotoId((prev) => {
       const next = { ...prev };
       for (const p of list) {
-        if (next[p.id] === undefined) {
-          next[p.id] = p.jp_auto ?? "";
+        const fallback = p.jp_intent ?? p.jp_auto ?? "";
+        if (next[p.id] === undefined || (!next[p.id].trim() && fallback.trim())) {
+          next[p.id] = fallback;
         }
       }
       return next;
@@ -427,17 +429,7 @@ export function EntryWizard({ id }: { id: string }) {
     if (!hasFinal) return;
 
     memoAutoRequestedRef.current = entry.id;
-    setMemoAutoLoading(true);
-    apiFetch<{ suggestions: string[] }>(`/api/entries/${id}/memos/auto`)
-      .then((res) => {
-        if (memoDraftTouched || memoDraft.trim()) return;
-        if (!res.suggestions.length) return;
-        setMemoDraft(res.suggestions.join("\n"));
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        setMemoAutoLoading(false);
-      });
+    void requestAutoMemo({ overwriteExisting: false, markAsTouched: false });
   }, [entry, id, memoDraft, memoDraftTouched, photos]);
 
   useEffect(() => {
@@ -548,6 +540,74 @@ export function EntryWizard({ id }: { id: string }) {
     scheduleLearningHighlightsSave(photoId, learningHighlights);
   }
 
+  async function regenerateLearningHighlights(photoId: string) {
+    if (!window.confirm(
+      t(
+        "現在の訂正ハイライトは消えて、自動色付けをやり直します。よろしいですか？",
+        "Le surlignage actuel sera effacé et recalculé automatiquement. Continuer ?",
+      ),
+    )) {
+      return;
+    }
+
+    const photo = photos.find((p) => p.id === photoId);
+    if (!photo?.final_fr) return;
+
+    setHighlightRegeneratingId(photoId);
+    setError(null);
+    try {
+      const res = await apiFetch<PhotoDiff>(`/api/entries/${id}/photos/${photoId}/diff?refresh=1`);
+      const learningHighlights =
+        normalizeLearningHighlights(res.learning_highlights) ??
+        buildLearningHighlights(photo.draft_fr ?? "", photo.final_fr ?? "", profile?.cefr_level ?? "A2");
+      handleLearningHighlightsChange(photoId, learningHighlights);
+      setDiffByPhotoId((prev) => ({
+        ...prev,
+        [photoId]: {
+          draft: photo.draft_fr ?? "",
+          final: photo.final_fr ?? "",
+          tokens: res.diff.tokens,
+          cefrLevel: profile?.cefr_level ?? "A2",
+          learningHighlights,
+        },
+      }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setHighlightRegeneratingId((current) => current === photoId ? null : current);
+    }
+  }
+
+  async function requestAutoMemo(options: {
+    overwriteExisting: boolean;
+    markAsTouched: boolean;
+  }) {
+    const existing = memoDraft.trim();
+    if (options.overwriteExisting && existing) {
+      const confirmed = window.confirm(
+        t(
+          "今のメモ内容は上書きされます。自動生成をやり直しますか？",
+          "Le contenu actuel des notes sera remplacé. Relancer la génération automatique ?",
+        ),
+      );
+      if (!confirmed) return;
+    }
+
+    setMemoAutoLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch<{ suggestions: string[] }>(`/api/entries/${id}/memos/auto`);
+      if (!res.suggestions.length) return;
+      setMemoDraft(res.suggestions.join("\n"));
+      setMemoPendingSave(true);
+      if (options.markAsTouched) setMemoDraftTouched(true);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setMemoAutoLoading(false);
+    }
+  }
+
   async function updateEntryTitle(nextTitle: string) {
     if (!entry) return;
     setEntry({ ...entry, title_fr: nextTitle });
@@ -630,7 +690,7 @@ export function EntryWizard({ id }: { id: string }) {
 
       setJpIntentDraftByPhotoId((prev) => ({
         ...prev,
-        [updated.id]: prev[updated.id] ?? updated.jp_auto ?? "",
+        [updated.id]: updated.jp_intent ?? updated.jp_auto ?? "",
       }));
     } catch (err) {
       setError((err as Error).message);
@@ -1010,6 +1070,12 @@ export function EntryWizard({ id }: { id: string }) {
                       value={activePhoto.jp_auto ?? ""}
                       readOnly
                     />
+                    <p className="timeline-detail">
+                      {t(
+                        "この内容は下の「日本語文を確定」にも自動で入ります。",
+                        "Ce contenu est recopié automatiquement dans « Valider le texte japonais » ci-dessous.",
+                      )}
+                    </p>
                   </div>
                 ) : null}
 
@@ -1102,22 +1168,44 @@ export function EntryWizard({ id }: { id: string }) {
                           "Échec du chargement du surlignage des corrections.",
                         )}
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => void regenerateLearningHighlights(activePhoto.id)}
+                        disabled={highlightRegeneratingId === activePhoto.id}
+                      >
+                        {highlightRegeneratingId === activePhoto.id
+                          ? t("自動色付けをやり直し中…", "Recalcul du surlignage…")
+                          : t("自動色付けをやり直す", "Relancer le surlignage auto")}
+                      </button>
                     </div>
                   ) : diffByPhotoId[activePhoto.id]?.tokens ? (
-                    <DiffReadOnly
-                      tokens={diffByPhotoId[activePhoto.id].tokens}
-                      knownWords={activeLearningHighlights.knownWords}
-                      unknownWords={activeLearningHighlights.unknownWords}
-                      grammarWords={activeLearningHighlights.grammarWords}
-                      savedTokenSignature={activeLearningHighlights.tokenSignature}
-                      savedWordClassByKey={activeLearningHighlights.wordClassByKey}
-                      onLearningHighlightsChange={(next) =>
-                        handleLearningHighlightsChange(activePhoto.id, next)
-                      }
-                      showLegend
-                      interactiveWordHighlight
-                      showDiffColors={false}
-                    />
+                    <>
+                      <DiffReadOnly
+                        tokens={diffByPhotoId[activePhoto.id].tokens}
+                        knownWords={activeLearningHighlights.knownWords}
+                        unknownWords={activeLearningHighlights.unknownWords}
+                        grammarWords={activeLearningHighlights.grammarWords}
+                        savedTokenSignature={activeLearningHighlights.tokenSignature}
+                        savedWordClassByKey={activeLearningHighlights.wordClassByKey}
+                        onLearningHighlightsChange={(next) =>
+                          handleLearningHighlightsChange(activePhoto.id, next)
+                        }
+                        showLegend
+                        interactiveWordHighlight
+                        showDiffColors={false}
+                      />
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                        <button
+                          type="button"
+                          onClick={() => void regenerateLearningHighlights(activePhoto.id)}
+                          disabled={highlightRegeneratingId === activePhoto.id}
+                        >
+                          {highlightRegeneratingId === activePhoto.id
+                            ? t("自動色付けをやり直し中…", "Recalcul du surlignage…")
+                            : t("自動色付けをやり直す", "Relancer le surlignage auto")}
+                        </button>
+                      </div>
+                    </>
                   ) : (
                     <div className="card">
                       <h3>{t("訂正ハイライト", "Surlignage des corrections")}</h3>
@@ -1177,6 +1265,15 @@ export function EntryWizard({ id }: { id: string }) {
               disabled={memoSaving || !memoPendingSave}
             >
               {t("保存", "Enregistrer")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void requestAutoMemo({ overwriteExisting: true, markAsTouched: true })}
+              disabled={memoAutoLoading || !photos.some((p) => (p.final_fr ?? "").trim())}
+            >
+              {memoAutoLoading
+                ? t("メモを自動生成中…", "Génération des notes…")
+                : t("メモの自動生成をやり直す", "Relancer la génération des notes")}
             </button>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { generateLearningNotes } from '@/lib/ai/client';
 import { badRequest } from '@/lib/api/errors';
 import { handleApiError, ok } from '@/lib/api/response';
+import { buildLearnerContextFromTexts } from '@/lib/learning/context';
 import {
   buildLearningHighlightsFromDiff,
   buildLearningHighlightsWithAI,
@@ -23,6 +24,7 @@ export async function GET(
     const [
       { data: entry, error: entryError },
       { data: photos, error: photosError },
+      { data: learnerPhotos, error: learnerPhotosError },
       { data: profile, error: profileError }
     ] = await Promise.all([
       client.from('entries').select('*').eq('id', entryId).single(),
@@ -31,6 +33,12 @@ export async function GET(
         .select('draft_fr,final_fr,learning_highlights')
         .eq('entry_id', entryId)
         .order('position', { ascending: true }),
+      client
+        .from('entry_photos')
+        .select('draft_fr,final_fr')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(30),
       client
         .from('user_profiles')
         .select('cefr_level,grammatical_gender,politeness_pref,service_language')
@@ -44,9 +52,18 @@ export async function GET(
     if (photosError) {
       badRequest('ENTRY_PHOTOS_LIST_FAILED', 'Unable to fetch entry photos');
     }
+    if (learnerPhotosError) {
+      badRequest('ENTRY_PHOTOS_LIST_FAILED', 'Unable to fetch learner context');
+    }
     if (profileError || !profile) {
       badRequest('PROFILE_NOT_FOUND', 'Profile not found');
     }
+
+    const learnerContext = buildLearnerContextFromTexts([
+      ...(learnerPhotos ?? []).flatMap((row) => [row.draft_fr ?? '', row.final_fr ?? '']),
+      entry.draft_fr ?? '',
+      entry.final_fr ?? '',
+    ]);
 
     const pairs =
       photos && photos.length
@@ -59,6 +76,7 @@ export async function GET(
                   p.draft_fr ?? '',
                   p.final_fr ?? '',
                   profile.cefr_level,
+                  learnerContext,
                 );
 
               const highlights = buildLearningHighlightsFromDiff(
@@ -85,6 +103,7 @@ export async function GET(
                   entry.draft_fr ?? '',
                   entry.final_fr ?? '',
                   profile.cefr_level,
+                  learnerContext,
                 );
 
               const highlights = buildLearningHighlightsFromDiff(
