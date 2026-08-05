@@ -523,166 +523,153 @@ export default function NewEntryPage() {
   }
 
   return (
-    <div className="page-stack">
-      <div className="card form-card new-entry-simple">
-        <h1>{t("新規エントリー作成", "Créer une entrée")}</h1>
-        <p className="timeline-detail">
+    <div className="page-stack new-entry-workspace">
+      <header className="card panel-highlight new-entry-header">
+        <span className="eyebrow">{t("ステップ 1 / 4", "Étape 1 / 4")}</span>
+        <h1>{t("写真とフランス語", "Photos et texte français")}</h1>
+        <p>
           {t(
-            "写真（最大10枚）を選び、写真ごとにフランス語テキストを書いてください。",
-            "Sélectionnez jusqu’à 10 photos et écrivez un texte en français pour chaque photo.",
+            "最大10枚の写真を選び、写真ごとにフランス語テキストを書いてください。",
+            "Sélectionnez jusqu’à 10 photos et écrivez un texte français pour chacune.",
           )}
         </p>
+      </header>
 
-        <form onSubmit={onSubmit}>
-          <label>
-            {t("フランス語タイトル", "Titre en français")}
-            <input
-              value={titleFr}
-              onChange={(e) => setTitleFr(e.target.value)}
-              required
-              maxLength={200}
-            />
-          </label>
+      <form onSubmit={onSubmit} className="new-entry-form">
+        <div className="editor-stage-grid new-entry-stage-grid">
+          <section className="card editor-stage-card new-entry-picker-card">
+            <div className="editor-card-heading">
+              <span className="editor-step-number">1</span>
+              <h2>{t("写真を選ぶ", "Choisir les photos")}</h2>
+              <span className="badge">{photos.length} / 10</span>
+            </div>
+            <label className="new-entry-file-picker">
+              {t("写真を追加（最大10枚）", "Ajouter des photos (max. 10)")}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleAddFilesChange}
+                disabled={busy || photos.length >= 10}
+              />
+            </label>
 
-          <label>
-            {t("写真（最大10枚）", "Photos (max 10)")}
+            {activePhoto ? (
+              <>
+                <img
+                  src={activePhoto.previewUrl}
+                  alt={`photo-${activeIndex + 1}`}
+                  className="editor-photo-preview"
+                />
+                <div className="new-entry-photo-tabs" aria-label={t("選択した写真", "Photos sélectionnées")}>
+                  {photos.map((photo, index) => (
+                    <button
+                      key={`${photo.file.name}-${index}`}
+                      type="button"
+                      className={index === activeIndex ? "pill pill-active" : "pill"}
+                      onClick={() => setActiveIndex(index)}
+                    >
+                      {t("写真", "Photo")} {index + 1}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="new-entry-empty-photo">
+                {t("左上のピッカーから写真を選択してください。", "Choisissez des photos avec le sélecteur ci-dessus.")}
+              </div>
+            )}
+          </section>
+
+          <section className="card editor-stage-card new-entry-copy-card">
+            <div className="editor-card-heading">
+              <span className="editor-step-number">1</span>
+              <h2>{t("タイトルと本文", "Titre et texte")}</h2>
+            </div>
+            <label>
+              {t("フランス語タイトル", "Titre en français")}
+              <input
+                value={titleFr}
+                onChange={(event) => setTitleFr(event.target.value)}
+                required
+                maxLength={200}
+              />
+            </label>
+            <label>
+              {activePhoto
+                ? t(`写真 ${activeIndex + 1} のフランス語テキスト`, `Texte français de la photo ${activeIndex + 1}`)
+                : t("写真ごとのフランス語テキスト", "Texte français de chaque photo")}
+              <textarea
+                value={activePhoto?.draftFr ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setPhotos((current) =>
+                    current.map((photo, index) =>
+                      index === activeIndex ? { ...photo, draftFr: value } : photo,
+                    ),
+                  );
+                }}
+                rows={12}
+                required
+                maxLength={8000}
+                placeholder="Ex : J'ai vu un coucher de soleil."
+                disabled={!activePhoto}
+              />
+            </label>
+            <p className="timeline-detail">
+              {t("写真を切り替えると、それぞれ別の文章を入力できます。", "Chaque photo conserve son propre texte lorsque vous naviguez.")}
+            </p>
+          </section>
+        </div>
+
+        {photos.length ? (
+          <div className="editor-photo-toolbar new-entry-photo-toolbar">
+            <button
+              type="button"
+              className="btn-secondary editor-photo-arrow"
+              onClick={() => goToPhoto(activeIndex - 1)}
+              disabled={busy || activeIndex === 0}
+            >
+              {t("← 前の写真", "← Photo précédente")}
+            </button>
+            <div className="editor-photo-position">
+              <strong>{t(`写真 ${activeIndex + 1} / ${photos.length}`, `Photo ${activeIndex + 1} / ${photos.length}`)}</strong>
+              <span>{activePhoto?.file.name}</span>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary editor-photo-arrow"
+              onClick={() => goToPhoto(activeIndex + 1)}
+              disabled={busy || activeIndex === photos.length - 1}
+            >
+              {t("次の写真 →", "Photo suivante →")}
+            </button>
+          </div>
+        ) : null}
+
+        <div className="new-entry-actions">
+          <div className="new-entry-photo-actions">
+            <button type="button" className="btn-secondary" onClick={() => removePhoto(activeIndex)} disabled={busy || !activePhoto}>
+              {t("この写真を削除", "Supprimer cette photo")}
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => replaceInputRef.current?.click()} disabled={busy || !activePhoto}>
+              {t("この写真を選び直す", "Remplacer cette photo")}
+            </button>
             <input
+              ref={replaceInputRef}
               type="file"
               accept="image/*"
-              multiple
-              onChange={handleAddFilesChange}
+              onChange={handleReplaceFileChange}
+              className="visually-hidden"
             />
-            <div className="field-meta">
-              {t("選択枚数:", "Nombre sélectionné :")} {photos.length}
-            </div>
-          </label>
-
-          {photos.length > 0 ? (
-            <div className="card" style={{ padding: 12 }}>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {photos.map((p, i) => (
-                  <button
-                    key={`${p.file.name}-${i}`}
-                    type="button"
-                    onClick={() => setActiveIndex(i)}
-                    className={i === activeIndex ? "pill pill-active" : "pill"}
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
-                    <span>
-                      {t("写真", "Photo")} {i + 1}
-                    </span>
-                    <span style={{ opacity: 0.8 }}>{p.file.name}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="new-entry-editor">
-                <div className="new-entry-preview-panel">
-                  {activePhoto ? (
-                    <img
-                      src={activePhoto.previewUrl}
-                      alt={`photo-${activeIndex + 1}`}
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        borderRadius: 8,
-                        border: "1px solid #e2e8f0",
-                      }}
-                    />
-                  ) : null}
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      marginTop: 8,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => goToPhoto(activeIndex - 1)}
-                      disabled={busy || activeIndex === 0}
-                    >
-                      {t("← 前の写真", "← Photo précédente")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => goToPhoto(activeIndex + 1)}
-                      disabled={busy || activeIndex === photos.length - 1}
-                    >
-                      {t("次の写真 →", "Photo suivante →")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(activeIndex)}
-                      disabled={busy}
-                    >
-                      {t("この写真を削除", "Supprimer cette photo")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => replaceInputRef.current?.click()}
-                      disabled={busy || !activePhoto}
-                    >
-                      {t("この写真を選び直す", "Sélectionner de nouveau cette photo")}
-                    </button>
-                    <input
-                      ref={replaceInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleReplaceFileChange}
-                      style={{ display: "none" }}
-                    />
-                  </div>
-                  <p className="field-meta">
-                    {t(
-                      "この端末で元の写真を読み込めなくなった場合は、この写真を選び直してください。",
-                      "Si le fichier d’origine n’est plus lisible sur cet appareil, sélectionnez de nouveau cette photo.",
-                    )}
-                  </p>
-                </div>
-
-                <div className="new-entry-draft-panel">
-                  <label>
-                    {t(
-                      `写真 ${activeIndex + 1} のフランス語テキスト`,
-                      `Texte en français pour la photo ${activeIndex + 1}`,
-                    )}
-                    <textarea
-                      value={activePhoto?.draftFr ?? ""}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setPhotos((prev) =>
-                          prev.map((p, idx) =>
-                            idx === activeIndex ? { ...p, draftFr: value } : p,
-                          ),
-                        );
-                      }}
-                      rows={10}
-                      required
-                      maxLength={8000}
-                      placeholder={t(
-                        "Ex : J'ai vu un coucher de soleil.",
-                        "Ex : J'ai vu un coucher de soleil.",
-                      )}
-                      disabled={!activePhoto}
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <button type="submit" disabled={!canSubmit}>
-            {busy
-              ? t("作成中...", "Création...")
-              : t("作成して次へ", "Créer et continuer")}
+          </div>
+          <button type="submit" disabled={!canSubmit} className="new-entry-submit">
+            {busy ? t("作成中...", "Création...") : t("作成して次へ", "Créer et continuer")}
           </button>
-        </form>
+        </div>
+      </form>
 
-        {error ? <p className="error">{error}</p> : null}
-      </div>
+      {error ? <p className="error">{error}</p> : null}
     </div>
   );
 }

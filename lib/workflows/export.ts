@@ -2,10 +2,8 @@ import { SupabaseClient } from "@supabase/supabase-js";
 
 import { badRequest, conflict } from "@/lib/api/errors";
 import { issueExportToken } from "@/lib/exports/token";
-import {
-  buildLearningHighlightsWithAI,
-  normalizeLearningHighlights,
-} from "@/lib/learning/highlight";
+import { normalizeCorrectionAnnotations } from "@/lib/learning/annotations";
+import { generatePhotoTextePdf } from "@/lib/pdf/generator";
 import { generatePhotoTextePptx } from "@/lib/pptx/generator";
 import { exportBucket, photoBucket } from "@/lib/storage/buckets";
 
@@ -58,8 +56,9 @@ export async function runExportWorkflow(params: {
   userId: string;
   entryId: string;
   includeMemos: boolean;
+  format: "pptx" | "pdf";
 }) {
-  const { client, userId, entryId, includeMemos } = params;
+  const { client, userId, entryId, includeMemos, format } = params;
 
   const entryResult = await client
     .from("entries")
@@ -191,13 +190,9 @@ export async function runExportWorkflow(params: {
         : undefined;
 
       return {
-        ...(
-          normalizeLearningHighlights(p.learning_highlights) ??
-          await buildLearningHighlightsWithAI(
-            p.draft_fr ?? "",
-            p.final_fr ?? "",
-            profile?.cefr_level ?? "A2",
-          )
+        annotations: normalizeCorrectionAnnotations(
+          p.learning_highlights,
+          p.final_fr ?? "",
         ),
         position: p.position ?? 1,
         draftFr: p.draft_fr ?? "",
@@ -209,23 +204,27 @@ export async function runExportWorkflow(params: {
     }),
   );
 
-  const pptxBuffer = await generatePhotoTextePptx({
+  const presentationInput = {
     titleFr: entry.title_fr,
     displayName,
     photos: pptxPhotos,
     learningBullets,
-  });
+  };
+  const fileBuffer = format === "pdf"
+    ? await generatePhotoTextePdf(presentationInput)
+    : await generatePhotoTextePptx(presentationInput);
 
   const { token, hash } = issueExportToken();
-  const objectPath = `${userId}/${entry.id}/${hash}.pptx`;
+  const objectPath = `${userId}/${entry.id}/${hash}.${format}`;
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   const upload = await client.storage
     .from(exportBucket())
-    .upload(objectPath, pptxBuffer, {
+    .upload(objectPath, fileBuffer, {
       upsert: false,
-      contentType:
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      contentType: format === "pdf"
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     });
   if (upload.error) {
     badRequest("EXPORT_UPLOAD_FAILED", "Unable to save export file");
@@ -266,6 +265,7 @@ export async function runExportWorkflow(params: {
 
   return {
     token,
+    format,
     expires_at: expiresAt.toISOString(),
   };
 }

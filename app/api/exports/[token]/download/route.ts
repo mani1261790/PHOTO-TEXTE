@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { badRequest } from '@/lib/api/errors';
-import { buildPptxContentDisposition } from '@/lib/pptx/download';
 import { handleApiError } from '@/lib/api/response';
+import { buildExportContentDisposition, ExportFormat } from '@/lib/exports/download';
 import { hashExportToken } from '@/lib/exports/token';
 import { exportBucket } from '@/lib/storage/buckets';
 import { createServiceClient } from '@/lib/supabase/client';
@@ -44,12 +44,14 @@ export async function GET(
       : { data: null };
 
     const arrayBuffer = await download.data.arrayBuffer();
+    const format: ExportFormat = file.object_path.toLowerCase().endsWith('.pdf') ? 'pdf' : 'pptx';
     return new NextResponse(Buffer.from(arrayBuffer), {
       status: 200,
       headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'Content-Disposition': buildPptxContentDisposition(entry?.title_fr)
+        'Content-Type': format === 'pdf'
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'Content-Disposition': buildExportContentDisposition(entry?.title_fr, format)
       }
     });
   } catch (error) {

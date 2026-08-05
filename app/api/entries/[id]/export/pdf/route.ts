@@ -14,8 +14,7 @@ export async function POST(
   try {
     const { id } = await context.params;
     const { user, client } = await authedClient(req);
-    assertRateLimit(user.id, 'pptx_export', 12, 60_000);
-
+    assertRateLimit(user.id, 'pdf_export', 12, 60_000);
     const payload = await parseJson(req, exportSchema);
 
     const result = await runExportWorkflow({
@@ -23,7 +22,7 @@ export async function POST(
       userId: user.id,
       entryId: id,
       includeMemos: Boolean(payload.include_memos),
-      format: 'pptx'
+      format: 'pdf'
     });
 
     return ok(result);

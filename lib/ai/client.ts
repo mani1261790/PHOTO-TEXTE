@@ -11,24 +11,11 @@ type Constraints = {
 type LearningNotePair = {
   draftFr: string;
   finalFr: string;
-  highlights?: HighlightSuggestion;
 };
 
 type LearningNoteOptions = {
   language: 'ja' | 'fr';
-  unknownWords?: string[];
   maxNotes?: number;
-};
-
-export type HighlightSuggestion = {
-  knownWords: string[];
-  unknownWords: string[];
-  grammarWords: string[];
-};
-
-export type LearnerHighlightContext = {
-  knownWords?: string[];
-  sampleTexts?: string[];
 };
 
 function getOpenAIClient(): OpenAI | null {
@@ -41,21 +28,6 @@ function getOpenAIClient(): OpenAI | null {
 
 function parseOutput(outputText: string): string {
   return outputText.replace(/^```[a-z]*\n?/i, '').replace(/```$/i, '').trim();
-}
-
-function uniqueNormalized(words: string[]): string[] {
-  return [...new Set(words.map((word) => word.trim().toLowerCase()).filter(Boolean))];
-}
-
-function parseJsonObject<T>(outputText: string): T | null {
-  const text = parseOutput(outputText);
-  if (!text) return null;
-
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
 }
 
 export async function translateFrToJa(draftFr: string): Promise<string> {
@@ -140,9 +112,8 @@ function buildLearningNotesInstruction(
     `Grammatical gender: ${constraints.grammaticalGender}.`,
     politeness,
     `Write the notes in ${lang}.`,
-    'Base the notes only on the highlighted learning targets provided for each photo.',
-    'Ignore corrections that are not included in the highlighted targets.',
-    'Focus on grammar corrections, vocabulary/expressions, and key fixes between draft and final.',
+    'Compare the draft and final French for each photo.',
+    'Focus on useful grammar corrections, vocabulary/expressions, and key fixes between draft and final.',
     'Keep each bullet concise (one line).',
     'Return 4-8 bullet lines, no numbering, no extra commentary.'
   ].join(' ');
@@ -165,8 +136,7 @@ export async function generateLearningNotes(
   const cleanPairs = pairs
     .map((p) => ({
       draftFr: (p.draftFr ?? '').trim(),
-      finalFr: (p.finalFr ?? '').trim(),
-      highlights: p.highlights ?? { grammarWords: [], knownWords: [], unknownWords: [] }
+      finalFr: (p.finalFr ?? '').trim()
     }))
     .filter((p) => p.draftFr && p.finalFr);
 
@@ -176,20 +146,9 @@ export async function generateLearningNotes(
 
   const client = getOpenAIClient();
   if (!client) {
-    const fallback = cleanPairs.flatMap((p) => {
-      const grammar = p.highlights.grammarWords.map((word) => `文法: ${word}`);
-      const known = p.highlights.knownWords.map((word) => `語彙修正: ${word}`);
-      const unknown = p.highlights.unknownWords.map((word) => `覚える語: ${word}`);
-      return [...grammar, ...known, ...unknown];
-    }).slice(0, maxNotes);
-    if (!fallback.length) {
-      return [];
-    }
-    const prefix = options.language === 'fr' ? 'Note' : '学び';
-    return fallback.map((line) => `【${prefix}】${line}`);
+    return [];
   }
 
-  const unknownWords = (options.unknownWords ?? []).slice(0, 12);
   const pairsText = cleanPairs
     .map(
       (p, idx) =>
@@ -197,9 +156,6 @@ export async function generateLearningNotes(
           `Photo ${idx + 1}`,
           `Draft: ${p.draftFr}`,
           `Final: ${p.finalFr}`,
-          `Highlighted grammar targets: ${p.highlights.grammarWords.join(', ') || '(none)'}`,
-          `Highlighted known-word corrections: ${p.highlights.knownWords.join(', ') || '(none)'}`,
-          `Highlighted unknown-word targets: ${p.highlights.unknownWords.join(', ') || '(none)'}`,
         ].join('\n')
     )
     .join('\n\n');
@@ -216,9 +172,6 @@ export async function generateLearningNotes(
         role: 'user',
         content: [
           'Generate learning notes from the following data.',
-          unknownWords.length
-            ? `Unknown words to prioritize: ${unknownWords.join(', ')}`
-            : 'Unknown words to prioritize: (none)',
           `Max bullets: ${maxNotes}`,
           pairsText
         ].join('\n')
@@ -227,96 +180,4 @@ export async function generateLearningNotes(
   });
 
   return parseLearningNotes(response.output_text || '').slice(0, maxNotes);
-}
-
-export async function suggestHighlightColors(params: {
-  draftFr: string;
-  finalFr: string;
-  cefrLevel: CEFRLevel;
-  draftWords: string[];
-  learnerKnownWords?: string[];
-  learnerSampleTexts?: string[];
-  finalWords: string[];
-  changedWords: string[];
-  baseline: HighlightSuggestion;
-}): Promise<HighlightSuggestion | null> {
-  const client = getOpenAIClient();
-  if (!client) {
-    return null;
-  }
-
-  const finalWords = uniqueNormalized(params.finalWords);
-  if (!finalWords.length) {
-    return null;
-  }
-
-  const allowed = new Set(finalWords);
-  const changedWords = uniqueNormalized(params.changedWords).filter((word) => allowed.has(word));
-  const learnerKnownWords = uniqueNormalized(params.learnerKnownWords ?? []);
-  const learnerSampleTexts = (params.learnerSampleTexts ?? []).map((text) => text.trim()).filter(Boolean).slice(0, 12);
-  const baseline = {
-    grammarWords: uniqueNormalized(params.baseline.grammarWords).filter((word) => allowed.has(word)),
-    knownWords: uniqueNormalized(params.baseline.knownWords).filter((word) => allowed.has(word)),
-    unknownWords: uniqueNormalized(params.baseline.unknownWords).filter((word) => allowed.has(word))
-  };
-
-  const response = await client.responses.create({
-    model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-    store: false,
-    input: [
-      {
-        role: 'system',
-        content: [
-          'You are classifying words in a final French sentence for pre-filled correction highlights.',
-          'Return strict JSON only with keys grammarWords, knownWords, unknownWords.',
-          'Each value must be an array of lowercase normalized French words chosen only from the supplied finalWords list.',
-          'Do not include the same word in multiple arrays.',
-          'Only classify words that are part of a correction in finalFr, with strong preference for changedWords.',
-          'Use draftFr and draftWords as evidence of what the learner already knows or already tried to use.',
-          'Use learnerKnownWords and learnerSampleTexts as stronger evidence of the learner’s actual level than CEFR alone.',
-          'If the learner already uses a word, root, or structure in draftFr, do not mark it unknown just because it is above target CEFR.',
-          'If a word or structure already appears naturally in learnerSampleTexts, prefer knownWords or no highlight over unknownWords.',
-          'grammarWords: corrected words whose change is mainly grammatical glue, agreement, article, pronoun, preposition, auxiliary, inflection, or syntax support, and is still worth review for this learner.',
-          'knownWords: corrected lexical words the learner likely basically knows already, but used inaccurately.',
-          'unknownWords: corrected lexical words that are genuinely good new learning targets for this learner.',
-          'If a correction is already mastered, stylistic only, or not worth highlighting, leave it out of all arrays.'
-        ].join(' ')
-      },
-      {
-        role: 'user',
-        content: JSON.stringify({
-          cefrLevel: params.cefrLevel,
-          draftFr: params.draftFr,
-          finalFr: params.finalFr,
-          draftWords: uniqueNormalized(params.draftWords),
-          learnerKnownWords,
-          learnerSampleTexts,
-          finalWords,
-          changedWords,
-          baseline
-        })
-      }
-    ]
-  });
-
-  const parsed = parseJsonObject<Partial<HighlightSuggestion>>(response.output_text || '');
-  if (!parsed) {
-    return null;
-  }
-
-  const unknownWords = uniqueNormalized(parsed.unknownWords ?? []).filter((word) => allowed.has(word));
-  const grammarBlocked = new Set(unknownWords);
-  const grammarWords = uniqueNormalized(parsed.grammarWords ?? []).filter(
-    (word) => allowed.has(word) && !grammarBlocked.has(word)
-  );
-  const knownBlocked = new Set([...unknownWords, ...grammarWords]);
-  const knownWords = uniqueNormalized(parsed.knownWords ?? []).filter(
-    (word) => allowed.has(word) && !knownBlocked.has(word)
-  );
-
-  return {
-    grammarWords,
-    knownWords,
-    unknownWords
-  };
 }

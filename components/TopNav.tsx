@@ -15,7 +15,7 @@ import { useLanguage } from '@/components/LanguageProvider';
 export function TopNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const [isAuthed, setIsAuthed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -49,29 +49,15 @@ export function TopNav() {
   return (
     <header className="topnav">
       <div className="topnav-inner">
-        <div className="topnav-mobile-row">
-          <Link href="/" className="brand" onClick={closeMenu}>
-            <span className="brand-mark" aria-hidden>
-              <LogoMark />
-            </span>
-            <span>
-              <strong>PHOTO-TEXTE</strong>
-              <small>Atelier de rédaction visuelle</small>
-            </span>
-          </Link>
-          <button
-            type="button"
-            className="topnav-toggle"
-            aria-label={menuOpen ? t('メニューを閉じる', 'Fermer le menu') : t('メニューを開く', 'Ouvrir le menu')}
-            aria-expanded={menuOpen}
-            aria-controls="primary-menu"
-            onClick={() => setMenuOpen((current) => !current)}
-          >
-            <span aria-hidden />
-            <span aria-hidden />
-            <span aria-hidden />
-          </button>
-        </div>
+        <Link href="/" className="brand" onClick={closeMenu}>
+          <span className="brand-mark" aria-hidden>
+            <LogoMark />
+          </span>
+          <span>
+            <strong>PHOTO-TEXTE</strong>
+            <small>Atelier de rédaction visuelle</small>
+          </span>
+        </Link>
         <nav
           id="primary-menu"
           className={`topnav-links${menuOpen ? ' open' : ''}`}
@@ -100,6 +86,45 @@ export function TopNav() {
             </div>
           )}
         </nav>
+        <div className="topnav-utilities">
+          <fieldset className="language-switcher" aria-label={t('表示言語', "Langue d'affichage")}>
+            <legend className="visually-hidden">{t('表示言語', "Langue d'affichage")}</legend>
+            <label className="language-option" title="日本語">
+              <input
+                type="radio"
+                name="service-language"
+                value="ja"
+                checked={language === 'ja'}
+                onChange={() => setLanguage('ja')}
+              />
+              <span className="language-flag language-flag-ja" aria-hidden />
+              <span className="visually-hidden">日本語</span>
+            </label>
+            <label className="language-option" title="Français">
+              <input
+                type="radio"
+                name="service-language"
+                value="fr"
+                checked={language === 'fr'}
+                onChange={() => setLanguage('fr')}
+              />
+              <span className="language-flag language-flag-fr" aria-hidden />
+              <span className="visually-hidden">Français</span>
+            </label>
+          </fieldset>
+          <button
+            type="button"
+            className="topnav-toggle"
+            aria-label={menuOpen ? t('メニューを閉じる', 'Fermer le menu') : t('メニューを開く', 'Ouvrir le menu')}
+            aria-expanded={menuOpen}
+            aria-controls="primary-menu"
+            onClick={() => setMenuOpen((current) => !current)}
+          >
+            <span aria-hidden />
+            <span aria-hidden />
+            <span aria-hidden />
+          </button>
+        </div>
       </div>
     </header>
   );

@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { badRequest } from '@/lib/api/errors';
 import { parseJson } from '@/lib/api/parse';
 import { handleApiError, ok } from '@/lib/api/response';
-import { profileUpdateSchema } from '@/lib/api/schemas';
+import { profileLanguageUpdateSchema, profileUpdateSchema } from '@/lib/api/schemas';
 import { encryptField, unwrapDataKey } from '@/lib/crypto/envelope';
 import { authedClient } from '@/lib/supabase/authed';
 import { createServiceClient } from '@/lib/supabase/client';
@@ -93,6 +93,27 @@ export async function PUT(req: NextRequest) {
       ...data,
       email: nextEmail ?? user.email
     });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const { user, client } = await authedClient(req);
+    const payload = await parseJson(req, profileLanguageUpdateSchema);
+    const { data, error } = await client
+      .from('user_profiles')
+      .update({ service_language: payload.service_language })
+      .eq('id', user.id)
+      .select('service_language,updated_at')
+      .single();
+
+    if (error || !data) {
+      badRequest('PROFILE_UPDATE_FAILED', 'Unable to update profile language');
+    }
+
+    return ok(data);
   } catch (error) {
     return handleApiError(error);
   }

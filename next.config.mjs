@@ -7,6 +7,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   turbopack: {
     root: __dirname
+  },
+  outputFileTracingIncludes: {
+    '/api/entries/*/export/*': [
+      './node_modules/@expo-google-fonts/noto-sans-jp/400Regular/NotoSansJP_400Regular.ttf'
+    ]
   }
 };
 

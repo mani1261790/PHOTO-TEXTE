@@ -3,12 +3,6 @@ import { NextRequest } from 'next/server';
 import { generateLearningNotes } from '@/lib/ai/client';
 import { badRequest } from '@/lib/api/errors';
 import { handleApiError, ok } from '@/lib/api/response';
-import { buildLearnerContextFromTexts } from '@/lib/learning/context';
-import {
-  buildLearningHighlightsFromDiff,
-  buildLearningHighlightsWithAI,
-  normalizeLearningHighlights,
-} from '@/lib/learning/highlight';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
 import { authedClient } from '@/lib/supabase/authed';
 
@@ -24,21 +18,14 @@ export async function GET(
     const [
       { data: entry, error: entryError },
       { data: photos, error: photosError },
-      { data: learnerPhotos, error: learnerPhotosError },
       { data: profile, error: profileError }
     ] = await Promise.all([
       client.from('entries').select('*').eq('id', entryId).single(),
       client
         .from('entry_photos')
-        .select('draft_fr,final_fr,learning_highlights')
+        .select('draft_fr,final_fr')
         .eq('entry_id', entryId)
         .order('position', { ascending: true }),
-      client
-        .from('entry_photos')
-        .select('draft_fr,final_fr')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(30),
       client
         .from('user_profiles')
         .select('cefr_level,grammatical_gender,politeness_pref,service_language')
@@ -52,85 +39,28 @@ export async function GET(
     if (photosError) {
       badRequest('ENTRY_PHOTOS_LIST_FAILED', 'Unable to fetch entry photos');
     }
-    if (learnerPhotosError) {
-      badRequest('ENTRY_PHOTOS_LIST_FAILED', 'Unable to fetch learner context');
-    }
     if (profileError || !profile) {
       badRequest('PROFILE_NOT_FOUND', 'Profile not found');
     }
 
-    const learnerContext = buildLearnerContextFromTexts([
-      ...(learnerPhotos ?? []).flatMap((row) => [row.draft_fr ?? '', row.final_fr ?? '']),
-      entry.draft_fr ?? '',
-      entry.final_fr ?? '',
-    ]);
-
     const pairs =
       photos && photos.length
-        ? await Promise.all(photos
+        ? photos
             .filter((p) => (p.final_fr ?? '').trim())
-            .map(async (p) => {
-              const baseHighlights =
-                normalizeLearningHighlights(p.learning_highlights) ??
-                await buildLearningHighlightsWithAI(
-                  p.draft_fr ?? '',
-                  p.final_fr ?? '',
-                  profile.cefr_level,
-                  learnerContext,
-                );
-
-              const highlights = buildLearningHighlightsFromDiff(
-                p.draft_fr ?? '',
-                p.final_fr ?? '',
-                baseHighlights,
-              );
-
-              return {
+            .map((p) => ({
               draftFr: p.draft_fr ?? '',
               finalFr: p.final_fr ?? '',
-              highlights: {
-                grammarWords: highlights.grammarWords,
-                knownWords: highlights.knownWords,
-                unknownWords: highlights.unknownWords,
-              },
-            };
             }))
         : entry.final_fr
-          ? [await (async () => {
-              const baseHighlights =
-                normalizeLearningHighlights(entry.learning_highlights) ??
-                await buildLearningHighlightsWithAI(
-                  entry.draft_fr ?? '',
-                  entry.final_fr ?? '',
-                  profile.cefr_level,
-                  learnerContext,
-                );
-
-              const highlights = buildLearningHighlightsFromDiff(
-                entry.draft_fr ?? '',
-                entry.final_fr ?? '',
-                baseHighlights,
-              );
-
-              return {
+          ? [{
                 draftFr: entry.draft_fr ?? '',
                 finalFr: entry.final_fr ?? '',
-                highlights: {
-                  grammarWords: highlights.grammarWords,
-                  knownWords: highlights.knownWords,
-                  unknownWords: highlights.unknownWords,
-                },
-              };
-            })()]
+              }]
           : [];
 
     if (!pairs.length) {
       return ok({ suggestions: [] });
     }
-
-    const unknownWords = [...new Set(
-      pairs.flatMap((pair) => pair.highlights?.unknownWords ?? [])
-    )];
 
     const suggestions = await generateLearningNotes(
       pairs,
@@ -140,8 +70,7 @@ export async function GET(
         politenessPref: profile.politeness_pref
       },
       {
-        language: profile.service_language === 'fr' ? 'fr' : 'ja',
-        unknownWords
+        language: profile.service_language === 'fr' ? 'fr' : 'ja'
       }
     );
 

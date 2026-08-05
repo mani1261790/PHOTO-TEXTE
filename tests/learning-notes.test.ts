@@ -3,40 +3,27 @@ import { describe, expect, it } from "vitest";
 import { generateLearningNotes } from "@/lib/ai/client";
 
 describe("generateLearningNotes", () => {
-  it("uses finalized highlight targets for fallback memo generation", async () => {
-    const notes = await generateLearningNotes(
-      [
-        {
+  it("does not recreate automatic highlight classifications as a fallback", async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    try {
+      const notes = await generateLearningNotes(
+        [{
           draftFr: "Je vais a la maison.",
           finalFr: "Je vais à la maison.",
-          highlights: {
-            grammarWords: ["à"],
-            knownWords: [],
-            unknownWords: [],
-          },
+        }],
+        {
+          cefrLevel: "A2",
+          grammaticalGender: "neutral",
         },
         {
-          draftFr: "Je vois un truc.",
-          finalFr: "Je vois cependant un truc.",
-          highlights: {
-            grammarWords: [],
-            knownWords: [],
-            unknownWords: ["cependant"],
-          },
+          language: "ja",
         },
-      ],
-      {
-        cefrLevel: "A2",
-        grammaticalGender: "neutral",
-      },
-      {
-        language: "ja",
-      },
-    );
+      );
 
-    expect(notes).toEqual([
-      "【学び】文法: à",
-      "【学び】覚える語: cependant",
-    ]);
+      expect(notes).toEqual([]);
+    } finally {
+      if (originalKey) process.env.OPENAI_API_KEY = originalKey;
+    }
   });
 });
