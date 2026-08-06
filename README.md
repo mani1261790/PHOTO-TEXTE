@@ -180,6 +180,10 @@ devへは専用環境を指定します。
 npm run cf:deploy:dev
 ```
 
+`dev` ブランチへのpushは `.github/workflows/deploy-cloudflare-dev.yml` が検証、
+D1マイグレーション、dev Workerデプロイ、公開URLの応答確認まで自動実行します。
+GitHub ActionsのRepository Secret `CLOUDFLARE_API_TOKEN` が必要です。
+
 デプロイ前に、D1マイグレーション、R2コピー、4つの本番秘密値、必要なら2つの旧Supabaseログイン値が揃っていることを確認してください。
 
 旧 `supabase/migrations` は移行元スキーマの記録として残しています。新しい変更は `cloudflare/migrations` に追加します。
