@@ -116,7 +116,12 @@ async function migrateObject(tempDir, item, index, total) {
   } else {
     const response = await fetch(storageUrl(item.bucket, item.objectPath), { headers: supabaseHeaders });
     if (!response.ok) {
-      if (item.optional && response.status === 404) return false;
+      const body = await response.text();
+      const objectMissing = response.status === 404 || /NoSuchKey|Object not found/i.test(body);
+      if (item.optional && objectMissing) {
+        console.warn(`Skipped unreferenced missing object: ${item.bucket}/${item.objectPath}`);
+        return false;
+      }
       throw new Error(`Unable to download ${item.bucket} object (${response.status})`);
     }
     bytes = new Uint8Array(await response.arrayBuffer());
@@ -180,6 +185,11 @@ const tables = {
   exports: activeExports
 };
 
+const referencedAssetIds = new Set([
+  ...entries.map((entry) => entry.photo_asset_id).filter(Boolean),
+  ...entryPhotos.map((photo) => photo.photo_asset_id).filter(Boolean)
+]);
+
 const objects = [
   {
     bucket: 'system',
@@ -196,7 +206,7 @@ const objects = [
     objectPath: asset.object_path,
     contentType: asset.mime,
     sha256: asset.sha256,
-    optional: false
+    optional: !referencedAssetIds.has(asset.id)
   })),
   ...activeExports.map((item) => ({
     bucket: 'exports',
