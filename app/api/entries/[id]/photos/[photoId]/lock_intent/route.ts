@@ -6,7 +6,7 @@ import { parseJson } from '@/lib/api/parse';
 import { handleApiError, ok } from '@/lib/api/response';
 import { lockIntentSchema } from '@/lib/api/schemas';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 /**
  * POST /api/entries/:id/photos/:photoId/lock_intent

@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "photo-texte",
+  "account_id": "2ea670c2a6ff28e248ef084adf095e8b",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-06",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "photo-texte"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "photo-texte",
+      "database_id": "393aec73-1ce5-40d0-a827-f18caa9a22f5",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "CONTENT_BUCKET",
+      "bucket_name": "photo-texte-content"
+    }
+  ],
+  "vars": {
+    "PHOTO_BUCKET": "photos",
+    "EXPORT_BUCKET": "exports"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

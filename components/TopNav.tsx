@@ -39,7 +39,12 @@ export function TopNav() {
 
   const closeMenu = () => setMenuOpen(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/auth/sign-out', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'same-origin'
+    }).catch(() => undefined);
     clearAccessToken();
     setIsAuthed(false);
     closeMenu();

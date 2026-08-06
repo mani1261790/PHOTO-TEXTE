@@ -5,7 +5,7 @@ import { generateLearningNotes } from "@/lib/ai/client";
 describe("generateLearningNotes", () => {
   it("does not recreate automatic highlight classifications as a fallback", async () => {
     const originalKey = process.env.OPENAI_API_KEY;
-    delete process.env.OPENAI_API_KEY;
+    Reflect.deleteProperty(process.env, "OPENAI_API_KEY");
     try {
       const notes = await generateLearningNotes(
         [{

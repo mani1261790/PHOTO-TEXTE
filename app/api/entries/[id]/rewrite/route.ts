@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 
 import { handleApiError, ok } from '@/lib/api/response';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 import { runRewriteWorkflow } from '@/lib/workflows/rewrite';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
 

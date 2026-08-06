@@ -1,6 +1,6 @@
-import { SupabaseClient } from "@supabase/supabase-js";
-
 import { badRequest, conflict } from "@/lib/api/errors";
+import { CloudflareClient } from "@/lib/cloudflare/client";
+import { getAppEnv } from "@/lib/cloudflare/context";
 import { issueExportToken } from "@/lib/exports/token";
 import { normalizeCorrectionAnnotations } from "@/lib/learning/annotations";
 import { generatePhotoTextePdf } from "@/lib/pdf/generator";
@@ -14,24 +14,19 @@ function normalizeMime(mime: string | null | undefined): string {
 }
 
 async function signedPhotoData(
-  client: SupabaseClient,
+  client: CloudflareClient,
   path: string,
   mime: string | null | undefined,
 ): Promise<string | undefined> {
-  const signed = await client.storage
+  const download = await client.storage
     .from(photoBucket())
-    .createSignedUrl(path, 120);
+    .download(path);
 
-  if (signed.error || !signed.data?.signedUrl) {
+  if (download.error || !download.data) {
     return undefined;
   }
 
-  const response = await fetch(signed.data.signedUrl);
-  if (!response.ok) {
-    return undefined;
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
+  const arrayBuffer = await download.data.arrayBuffer();
   const b64 = Buffer.from(arrayBuffer).toString("base64");
 
   // IMPORTANT:
@@ -51,8 +46,17 @@ function pickSelfNoteBullets(
     .filter(Boolean);
 }
 
+async function loadJapanesePdfFont(): Promise<Uint8Array> {
+  const env = await getAppEnv();
+  const object = await env.CONTENT_BUCKET.get("system/fonts/NotoSansJP-Regular.ttf");
+  if (!object) {
+    badRequest("PDF_FONT_MISSING", "PDF Japanese font is not installed");
+  }
+  return object.bytes();
+}
+
 export async function runExportWorkflow(params: {
-  client: SupabaseClient;
+  client: CloudflareClient;
   userId: string;
   entryId: string;
   includeMemos: boolean;
@@ -211,7 +215,7 @@ export async function runExportWorkflow(params: {
     learningBullets,
   };
   const fileBuffer = format === "pdf"
-    ? await generatePhotoTextePdf(presentationInput)
+    ? await generatePhotoTextePdf(presentationInput, await loadJapanesePdfFont())
     : await generatePhotoTextePptx(presentationInput);
 
   const { token, hash } = issueExportToken();

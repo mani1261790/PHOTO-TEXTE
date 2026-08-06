@@ -1,4 +1,6 @@
 import JSZip from 'jszip';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 
@@ -163,6 +165,10 @@ describe('pptx export privacy', () => {
   });
 
   it('generates PDF pages with the same 16:9 size and page count as the PPTX', async () => {
+    const japaneseFont = await readFile(path.join(
+      process.cwd(),
+      'node_modules/@expo-google-fonts/noto-sans-jp/400Regular/NotoSansJP_400Regular.ttf'
+    ));
     const input = {
       titleFr: 'Mon titre',
       displayName: 'Alice',
@@ -178,7 +184,7 @@ describe('pptx export privacy', () => {
 
     const [pptxBuffer, pdfBuffer] = await Promise.all([
       generatePhotoTextePptx(input),
-      generatePhotoTextePdf(input),
+      generatePhotoTextePdf(input, japaneseFont),
     ]);
     const pptxZip = await JSZip.loadAsync(pptxBuffer);
     const pptxSlideCount = Object.keys(pptxZip.files).filter(

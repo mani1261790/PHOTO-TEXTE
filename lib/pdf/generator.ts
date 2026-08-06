@@ -1,9 +1,5 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFFont, PDFPage, PDFImage, StandardFonts, rgb } from "pdf-lib";
-import sharp from "sharp";
 
 import {
   PresentationExportInput,
@@ -19,15 +15,6 @@ import {
   presentationLayout as layout,
 } from "@/lib/exports/presentation";
 import { emptyCorrectionAnnotations, normalizeCorrectionAnnotations } from "@/lib/learning/annotations";
-
-const regularFontPath = path.join(
-  process.cwd(),
-  "node_modules",
-  "@expo-google-fonts",
-  "noto-sans-jp",
-  "400Regular",
-  "NotoSansJP_400Regular.ttf",
-);
 
 const POINTS_PER_INCH = 72;
 const PAGE_WIDTH = SLIDE_WIDTH_IN * POINTS_PER_INCH;
@@ -229,12 +216,13 @@ function drawTextPanel(
 
 async function embedPhoto(pdf: PDFDocument, data?: string): Promise<PDFImage | null> {
   if (!data) return null;
-  const match = data.match(/^data:[^;]+;base64,(.+)$/s);
+  const match = data.match(/^data:(image\/(?:jpeg|jpg|png));base64,(.+)$/s);
   if (!match) return null;
   try {
-    const source = Buffer.from(match[1], "base64");
-    const png = await sharp(source).png().toBuffer();
-    return await pdf.embedPng(png);
+    const source = Buffer.from(match[2], "base64");
+    return match[1] === "image/png"
+      ? await pdf.embedPng(source)
+      : await pdf.embedJpg(source);
   } catch {
     return null;
   }
@@ -495,14 +483,16 @@ function drawLearningPage(pdf: PDFDocument, fonts: PdfFonts, title: string, bull
   });
 }
 
-export async function generatePhotoTextePdf(data: PresentationExportInput): Promise<Buffer> {
+export async function generatePhotoTextePdf(
+  data: PresentationExportInput,
+  japaneseFontBytes: Uint8Array,
+): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const japaneseBytes = await readFile(regularFontPath);
   const fonts: PdfFonts = {
     regular: await pdf.embedFont(StandardFonts.Helvetica),
     bold: await pdf.embedFont(StandardFonts.HelveticaBold),
-    japanese: await pdf.embedFont(japaneseBytes),
+    japanese: await pdf.embedFont(japaneseFontBytes),
   };
   pdf.setAuthor("PHOTO-TEXTE App");
   pdf.setSubject("Student assignment export");

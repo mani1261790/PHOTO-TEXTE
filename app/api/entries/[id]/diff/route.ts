@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { badRequest } from '@/lib/api/errors';
 import { handleApiError, ok } from '@/lib/api/response';
 import { computeReadOnlyDiff } from '@/lib/diff/read-only';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 export async function GET(
   req: NextRequest,

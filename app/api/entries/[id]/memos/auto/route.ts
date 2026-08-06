@@ -4,7 +4,7 @@ import { generateLearningNotes } from '@/lib/ai/client';
 import { badRequest } from '@/lib/api/errors';
 import { handleApiError, ok } from '@/lib/api/response';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 export async function GET(
   req: NextRequest,

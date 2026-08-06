@@ -5,7 +5,7 @@ import { handleApiError } from '@/lib/api/response';
 import { buildExportContentDisposition, ExportFormat } from '@/lib/exports/download';
 import { hashExportToken } from '@/lib/exports/token';
 import { exportBucket } from '@/lib/storage/buckets';
-import { createServiceClient } from '@/lib/supabase/client';
+import { createServiceClient } from '@/lib/cloudflare/client';
 
 export async function GET(
   _req: NextRequest,
@@ -13,7 +13,7 @@ export async function GET(
 ) {
   try {
     const { token } = await context.params;
-    const service = createServiceClient();
+    const service = await createServiceClient();
 
     const hash = hashExportToken(token);
     const { data: file, error } = await service

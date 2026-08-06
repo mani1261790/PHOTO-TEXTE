@@ -66,9 +66,7 @@ async function loadImageElement(file: File): Promise<HTMLImageElement> {
 }
 
 async function maybeDownscalePhoto(file: File): Promise<File> {
-  if (!file.type.startsWith("image/") || file.size <= MAX_UPLOAD_BYTES) {
-    return file;
-  }
+  if (!file.type.startsWith("image/")) return file;
 
   const image = await loadImageElement(file);
   const scale = Math.min(
@@ -547,7 +545,7 @@ export default function NewEntryPage() {
               {t("写真を追加（最大10枚）", "Ajouter des photos (max. 10)")}
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 multiple
                 onChange={handleAddFilesChange}
                 disabled={busy || photos.length >= 10}
@@ -658,7 +656,7 @@ export default function NewEntryPage() {
             <input
               ref={replaceInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               onChange={handleReplaceFileChange}
               className="visually-hidden"
             />

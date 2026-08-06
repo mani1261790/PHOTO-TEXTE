@@ -1,5 +1,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
+
+await initOpenNextCloudflareForDev();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -7,11 +10,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   turbopack: {
     root: __dirname
-  },
-  outputFileTracingIncludes: {
-    '/api/entries/*/export/*': [
-      './node_modules/@expo-google-fonts/noto-sans-jp/400Regular/NotoSansJP_400Regular.ttf'
-    ]
   }
 };
 
