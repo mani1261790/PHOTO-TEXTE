@@ -35,5 +35,38 @@
   },
   "observability": {
     "enabled": true
+  },
+  "env": {
+    "dev": {
+      "name": "photo-texte-dev",
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "photo-texte-dev"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "photo-texte-dev",
+          "database_id": "48471c4f-f5e6-4d24-ab30-6895e13f175a",
+          "migrations_dir": "cloudflare/migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "CONTENT_BUCKET",
+          "bucket_name": "photo-texte-dev-content"
+        }
+      ],
+      "vars": {
+        "BETTER_AUTH_URL": "https://photo-texte-dev.mani1261790.workers.dev",
+        "PHOTO_BUCKET": "photos",
+        "EXPORT_BUCKET": "exports"
+      },
+      "observability": {
+        "enabled": true
+      }
+    }
   }
 }

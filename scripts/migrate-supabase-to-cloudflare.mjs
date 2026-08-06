@@ -10,7 +10,13 @@ try {
   // CI and production operators may provide variables directly.
 }
 
-const args = new Set(process.argv.slice(2));
+const rawArgs = process.argv.slice(2);
+const args = new Set(rawArgs);
+const environmentArg = rawArgs.find((arg) => arg.startsWith('--environment='));
+const wranglerEnvironment = environmentArg?.slice('--environment='.length);
+if (wranglerEnvironment && !/^[a-z0-9_-]+$/i.test(wranglerEnvironment)) {
+  throw new Error('Invalid Cloudflare environment name');
+}
 const apply = args.has('--apply');
 const databaseOnly = args.has('--database-only');
 const objectsOnly = args.has('--objects-only');
@@ -18,7 +24,8 @@ if (databaseOnly && objectsOnly) throw new Error('Choose only one of --database-
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '');
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const r2Bucket = process.env.CLOUDFLARE_R2_BUCKET ?? 'photo-texte-content';
+const r2Bucket = process.env.CLOUDFLARE_R2_BUCKET
+  ?? (wranglerEnvironment === 'dev' ? 'photo-texte-dev-content' : 'photo-texte-content');
 const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID ?? '2ea670c2a6ff28e248ef084adf095e8b';
 if (!supabaseUrl || !serviceKey) throw new Error('Supabase migration credentials are missing');
 
@@ -92,7 +99,8 @@ function insertSql(table, columns, row) {
 }
 
 function runWrangler(parameters) {
-  const result = spawnSync('npx', ['wrangler', ...parameters], {
+  const environmentArgs = wranglerEnvironment ? ['--env', wranglerEnvironment] : [];
+  const result = spawnSync('npx', ['wrangler', ...environmentArgs, ...parameters], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -220,6 +228,7 @@ const objects = [
 
 console.log(JSON.stringify({
   mode: apply ? 'apply' : 'dry-run',
+  environment: wranglerEnvironment ?? 'production',
   auth_users: betterAuthUsers.length,
   rows: Object.fromEntries(Object.entries(tables).map(([name, rows]) => [name, rows.length])),
   skipped_expired_exports: allExports.length - activeExports.length,

@@ -87,6 +87,17 @@ npm run cf:build
 - `ASSETS`: OpenNext静的アセット
 - `WORKER_SELF_REFERENCE`: OpenNext自己参照サービス
 
+productionとdevは、Worker・D1・R2を共有しません。
+
+| 環境 | Worker | D1 | R2 |
+| --- | --- | --- | --- |
+| production | `photo-texte` | `photo-texte` | `photo-texte-content` |
+| dev | `photo-texte-dev` | `photo-texte-dev` | `photo-texte-dev-content` |
+
+GitHubに残っているVercel PreviewはNext.jsのビルド確認には使えますが、D1/R2の
+Cloudflareバインディングがないため、API・ログインの動作確認先にはしません。
+devの統合確認には `https://photo-texte-dev.mani1261790.workers.dev` を使用します。
+
 初回だけR2をCloudflare Dashboardで有効化し、バケットを作成します。
 
 ```bash
@@ -127,6 +138,13 @@ R2だけを移行:
 npm run data:migrate:cloudflare -- --objects-only --apply
 ```
 
+devへ移行する場合:
+
+```bash
+npm run db:migrate:dev
+npm run data:migrate:cloudflare:dev -- --apply
+```
+
 全体を移行:
 
 ```bash
@@ -154,6 +172,12 @@ WHERE providerId = 'credential';
 
 ```bash
 npm run cf:deploy
+```
+
+devへは専用環境を指定します。
+
+```bash
+npm run cf:deploy:dev
 ```
 
 デプロイ前に、D1マイグレーション、R2コピー、4つの本番秘密値、必要なら2つの旧Supabaseログイン値が揃っていることを確認してください。

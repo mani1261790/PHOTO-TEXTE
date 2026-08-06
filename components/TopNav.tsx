@@ -43,6 +43,7 @@ export function TopNav() {
     await fetch('/api/auth/sign-out', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
       credentials: 'same-origin'
     }).catch(() => undefined);
     clearAccessToken();
