@@ -63,21 +63,29 @@ async function createOpenAIResponse(
   const config = await getOpenAIConfig();
   if (!config) return null;
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${config.apiKey}`,
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: config.model,
-      store: false,
-      input: [
-        { role: 'system', content: system },
-        { role: 'user', content: user }
-      ]
-    })
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  let response: Response;
+  try {
+    response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: config.model,
+        store: false,
+        input: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ]
+      }),
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const payload = await response.json() as OpenAIResponse;
   if (!response.ok) {

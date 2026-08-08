@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap");
+@import "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap";
 
 .pill {
     appearance: none;
@@ -353,7 +353,7 @@ p {
 
 .topnav-links a:focus-visible,
 .topnav-links button:focus-visible {
-    outline: 3px solid rgba(18, 116, 117, 0.25);
+    outline: 3px solid var(--theme-primary-pressed);
     outline-offset: 2px;
 }
 
