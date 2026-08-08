@@ -30,6 +30,7 @@
     }
   ],
   "vars": {
+    "OPENAI_MODEL": "gpt-4o-mini",
     "PHOTO_BUCKET": "photos",
     "EXPORT_BUCKET": "exports"
   },
@@ -48,19 +49,20 @@
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "photo-texte-dev",
-          "database_id": "48471c4f-f5e6-4d24-ab30-6895e13f175a",
+          "database_name": "photo-texte",
+          "database_id": "393aec73-1ce5-40d0-a827-f18caa9a22f5",
           "migrations_dir": "cloudflare/migrations"
         }
       ],
       "r2_buckets": [
         {
           "binding": "CONTENT_BUCKET",
-          "bucket_name": "photo-texte-dev-content"
+          "bucket_name": "photo-texte-content"
         }
       ],
       "vars": {
         "BETTER_AUTH_URL": "https://photo-texte-dev.mani1261790.workers.dev",
+        "OPENAI_MODEL": "gpt-4o-mini",
         "PHOTO_BUCKET": "photos",
         "EXPORT_BUCKET": "exports"
       },

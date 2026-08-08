@@ -138,11 +138,10 @@ R2だけを移行:
 npm run data:migrate:cloudflare -- --objects-only --apply
 ```
 
-devへ移行する場合:
+dev Workerも本番と同じD1/R2を参照します。dev専用データへの二重移行は行いません。共有D1へマイグレーションを適用する場合は、影響範囲を確認して明示的に実行します。
 
 ```bash
-npm run db:migrate:dev
-npm run data:migrate:cloudflare:dev -- --apply
+npm run db:migrate:shared
 ```
 
 全体を移行:

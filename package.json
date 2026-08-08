@@ -14,9 +14,8 @@
     "cf:types": "wrangler types --strict-vars false",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote --env \"\"",
-    "db:migrate:dev": "wrangler d1 migrations apply DB --remote --env dev",
+    "db:migrate:shared": "wrangler d1 migrations apply DB --remote --env \"\"",
     "data:migrate:cloudflare": "node scripts/migrate-supabase-to-cloudflare.mjs",
-    "data:migrate:cloudflare:dev": "node scripts/migrate-supabase-to-cloudflare.mjs --environment=dev",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run"
@@ -28,7 +27,6 @@
     "diff": "8.0.3",
     "jszip": "^3.10.1",
     "next": "16.3.0",
-    "openai": "^4.80.0",
     "pdf-lib": "^1.17.1",
     "pptxgenjs": "^3.12.0",
     "react": "19.0.0",

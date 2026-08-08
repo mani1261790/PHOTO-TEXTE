@@ -1,5 +1,4 @@
-import OpenAI from 'openai';
-
+import { getAppEnv } from '@/lib/cloudflare/context';
 import { CEFRLevel, GrammaticalGender } from '@/lib/types';
 
 type Constraints = {
@@ -18,12 +17,79 @@ type LearningNoteOptions = {
   maxNotes?: number;
 };
 
-function getOpenAIClient(): OpenAI | null {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) {
-    return null;
+type OpenAIConfig = {
+  apiKey: string;
+  model: string;
+};
+
+type OpenAIResponse = {
+  output?: Array<{
+    content?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+  error?: {
+    code?: string;
+    type?: string;
+  };
+};
+
+async function getOpenAIConfig(): Promise<OpenAIConfig | null> {
+  try {
+    const env = await getAppEnv();
+    if (env.OPENAI_API_KEY) {
+      return {
+        apiKey: env.OPENAI_API_KEY,
+        model: env.OPENAI_MODEL ?? 'gpt-4o-mini'
+      };
+    }
+  } catch {
+    // Local Next.js and unit tests do not have a Cloudflare request context.
   }
-  return new OpenAI({ apiKey: key });
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini'
+  };
+}
+
+async function createOpenAIResponse(
+  system: string,
+  user: string
+): Promise<string | null> {
+  const config = await getOpenAIConfig();
+  if (!config) return null;
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${config.apiKey}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: config.model,
+      store: false,
+      input: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ]
+    })
+  });
+
+  const payload = await response.json() as OpenAIResponse;
+  if (!response.ok) {
+    const reason = payload.error?.code ?? payload.error?.type ?? 'unknown_error';
+    throw new Error(`OpenAI request failed (${response.status}: ${reason})`);
+  }
+
+  return (payload.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .filter((item) => item.type === 'output_text')
+    .map((item) => item.text ?? '')
+    .join('');
 }
 
 function parseOutput(outputText: string): string {
@@ -31,28 +97,14 @@ function parseOutput(outputText: string): string {
 }
 
 export async function translateFrToJa(draftFr: string): Promise<string> {
-  const client = getOpenAIClient();
-  if (!client) {
+  const output = await createOpenAIResponse(
+    'Translate French text to natural Japanese for a student assignment. Return Japanese only.',
+    draftFr
+  );
+  if (output === null) {
     return `【JP要約】${draftFr}`;
   }
-
-  const response = await client.responses.create({
-    model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-    store: false,
-    input: [
-      {
-        role: 'system',
-        content:
-          'Translate French text to natural Japanese for a student assignment. Return Japanese only.'
-      },
-      {
-        role: 'user',
-        content: draftFr
-      }
-    ]
-  });
-
-  return parseOutput(response.output_text || '');
+  return parseOutput(output);
 }
 
 function buildRewriteInstruction(constraints: Constraints): string {
@@ -74,27 +126,14 @@ export async function rewriteJaToFr(
   jpIntent: string,
   constraints: Constraints
 ): Promise<string> {
-  const client = getOpenAIClient();
-  if (!client) {
+  const output = await createOpenAIResponse(
+    buildRewriteInstruction(constraints),
+    jpIntent
+  );
+  if (output === null) {
     return `[Final FR ${constraints.cefrLevel}] ${jpIntent}`;
   }
-
-  const response = await client.responses.create({
-    model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-    store: false,
-    input: [
-      {
-        role: 'system',
-        content: buildRewriteInstruction(constraints)
-      },
-      {
-        role: 'user',
-        content: jpIntent
-      }
-    ]
-  });
-
-  return parseOutput(response.output_text || '');
+  return parseOutput(output);
 }
 
 function buildLearningNotesInstruction(
@@ -144,11 +183,6 @@ export async function generateLearningNotes(
     return [];
   }
 
-  const client = getOpenAIClient();
-  if (!client) {
-    return [];
-  }
-
   const pairsText = cleanPairs
     .map(
       (p, idx) =>
@@ -160,24 +194,14 @@ export async function generateLearningNotes(
     )
     .join('\n\n');
 
-  const response = await client.responses.create({
-    model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
-    store: false,
-    input: [
-      {
-        role: 'system',
-        content: buildLearningNotesInstruction(constraints, options)
-      },
-      {
-        role: 'user',
-        content: [
-          'Generate learning notes from the following data.',
-          `Max bullets: ${maxNotes}`,
-          pairsText
-        ].join('\n')
-      }
-    ]
-  });
-
-  return parseLearningNotes(response.output_text || '').slice(0, maxNotes);
+  const output = await createOpenAIResponse(
+    buildLearningNotesInstruction(constraints, options),
+    [
+      'Generate learning notes from the following data.',
+      `Max bullets: ${maxNotes}`,
+      pairsText
+    ].join('\n')
+  );
+  if (output === null) return [];
+  return parseLearningNotes(output).slice(0, maxNotes);
 }

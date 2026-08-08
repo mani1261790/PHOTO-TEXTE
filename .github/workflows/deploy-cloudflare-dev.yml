@@ -40,9 +40,6 @@ jobs:
       - name: Check types
         run: npx tsc --noEmit
 
-      - name: Apply dev D1 migrations
-        run: npm run db:migrate:dev
-
       - name: Deploy dev Worker
         run: npm run cf:deploy:dev
 
