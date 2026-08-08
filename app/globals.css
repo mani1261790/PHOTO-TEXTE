@@ -1113,7 +1113,7 @@ button[disabled] {
 
 .editor-stepper {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
 }
 
@@ -1307,6 +1307,36 @@ button[disabled] {
 }
 
 .editor-final-input button {
+    width: auto;
+    margin: 0;
+}
+
+.editor-final-actions {
+    margin-top: 12px;
+}
+
+.editor-annotation-stage {
+    display: grid;
+    gap: 14px;
+}
+
+.editor-annotation-stage-heading {
+    margin: 0;
+    padding: 16px 18px;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--radius-card);
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.editor-annotation-stage-heading > div {
+    flex: 1;
+}
+
+.editor-annotation-stage-heading p {
+    margin: 4px 0 0;
+}
+
+.editor-annotation-stage-heading > button {
     width: auto;
     margin: 0;
 }
@@ -1592,6 +1622,19 @@ button[disabled] {
     .editor-card-actions {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .editor-annotation-stage-heading {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .editor-annotation-stage-heading > div {
+        flex-basis: calc(100% - 42px);
+    }
+
+    .editor-annotation-stage-heading > button {
+        width: 100%;
     }
 
     .editor-card-actions button,

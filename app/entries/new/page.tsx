@@ -479,7 +479,10 @@ export default function NewEntryPage() {
       }
 
       // 2) Create multi-photo entry + per-photo records
-      const created = await apiFetch<{ entry: { id: string } }>(
+      const created = await apiFetch<{
+        entry: { id: string };
+        photos: Array<{ id: string }>;
+      }>(
         "/api/entries/multi",
         {
           method: "POST",
@@ -497,6 +500,18 @@ export default function NewEntryPage() {
         window.localStorage.removeItem(NEW_ENTRY_DRAFT_STORAGE_KEY);
         void clearIndexedDraft().catch(() => undefined);
       }
+
+      // The creation form already contains the original photo and French text.
+      // Generate Japanese here so the editor opens on the next meaningful task
+      // instead of repeating the same information in its draft step.
+      await Promise.allSettled(
+        created.photos.map((photo) =>
+          apiFetch(`/api/entries/${created.entry.id}/photos/${photo.id}/translate`, {
+            method: "POST",
+            body: "{}",
+          }),
+        ),
+      );
       router.push(`/entries/${created.entry.id}`);
     } catch (err) {
       const message = (err as Error).message || "";
@@ -523,7 +538,7 @@ export default function NewEntryPage() {
   return (
     <div className="page-stack new-entry-workspace">
       <header className="card panel-highlight new-entry-header">
-        <span className="eyebrow">{t("ステップ 1 / 4", "Étape 1 / 4")}</span>
+        <span className="eyebrow">{t("ステップ 1 / 5", "Étape 1 / 5")}</span>
         <h1>{t("写真とフランス語", "Photos et texte français")}</h1>
         <p>
           {t(
@@ -662,7 +677,9 @@ export default function NewEntryPage() {
             />
           </div>
           <button type="submit" disabled={!canSubmit} className="new-entry-submit">
-            {busy ? t("作成中...", "Création...") : t("作成して次へ", "Créer et continuer")}
+            {busy
+              ? t("作成して日本語を生成中…", "Création et génération du japonais…")
+              : t("日本語文を生成", "Générer le texte japonais")}
           </button>
         </div>
       </form>

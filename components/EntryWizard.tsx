@@ -23,7 +23,7 @@ type EntryStatus =
   | "FINAL_FR_READY"
   | "EXPORTED";
 
-type EditorStep = "draft" | "jp_edit" | "jp_confirm" | "final";
+type EditorStep = "draft" | "jp_edit" | "jp_confirm" | "final" | "annotations";
 
 type Entry = {
   id: string;
@@ -108,10 +108,12 @@ export function EntryWizard({ id }: { id: string }) {
   const [stepByPhotoId, setStepByPhotoId] = useState<Record<string, EditorStep>>({});
   const [jpIntentDraftByPhotoId, setJpIntentDraftByPhotoId] = useState<Record<string, string>>({});
   const [finalDraftByPhotoId, setFinalDraftByPhotoId] = useState<Record<string, string>>({});
+  const [generatedFinalByPhotoId, setGeneratedFinalByPhotoId] = useState<Record<string, string>>({});
   const [annotationsByPhotoId, setAnnotationsByPhotoId] = useState<Record<string, CorrectionAnnotations>>({});
   const [annotationDirtyByPhotoId, setAnnotationDirtyByPhotoId] = useState<Record<string, boolean>>({});
   const [annotationSavingId, setAnnotationSavingId] = useState<string | null>(null);
   const [annotationSavedId, setAnnotationSavedId] = useState<string | null>(null);
+  const [annotationUnlockedByPhotoId, setAnnotationUnlockedByPhotoId] = useState<Record<string, boolean>>({});
 
   const [memos, setMemos] = useState<Memo[]>([]);
   const [memoDraft, setMemoDraft] = useState("");
@@ -151,6 +153,9 @@ export function EntryWizard({ id }: { id: string }) {
   const activeFinalDraft = activePhoto
     ? (finalDraftByPhotoId[activePhoto.id] ?? activePhoto.final_fr ?? "")
     : "";
+  const activeGeneratedFinal = activePhoto
+    ? (generatedFinalByPhotoId[activePhoto.id] ?? activePhoto.final_fr ?? "")
+    : "";
   const activeAnnotations = activePhoto
     ? (annotationsByPhotoId[activePhoto.id] ??
       normalizeCorrectionAnnotations(activePhoto.learning_highlights, activePhoto.final_fr ?? ""))
@@ -163,6 +168,9 @@ export function EntryWizard({ id }: { id: string }) {
     [activeFinalDraft, activePhoto?.draft_fr, activePhoto?.final_fr],
   );
   const exportReady = useMemo(() => isExportReady(photos), [photos]);
+  const showExportCard = exportReady && photos.every(
+    (photo) => Boolean(annotationUnlockedByPhotoId[photo.id]),
+  );
   const hasFinalText = photos.some((photo) => Boolean(photo.final_fr?.trim()));
   const progress = photos.length
     ? Math.round(
@@ -179,6 +187,7 @@ export function EntryWizard({ id }: { id: string }) {
       { key: "jp_edit" as const, label: t("2. 日本語を修正", "2. Corriger le japonais") },
       { key: "jp_confirm" as const, label: t("3. 日本語を確定", "3. Valider le japonais") },
       { key: "final" as const, label: t("4. 最終フランス語", "4. Français final") },
+      { key: "annotations" as const, label: t("5. 訂正ハイライト", "5. Repérage des corrections") },
     ],
     [language],
   );
@@ -213,6 +222,13 @@ export function EntryWizard({ id }: { id: string }) {
       });
       return next;
     });
+    setGeneratedFinalByPhotoId((current) => {
+      const next = { ...current };
+      orderedPhotos.forEach((photo) => {
+        if (next[photo.id] === undefined) next[photo.id] = photo.final_fr ?? "";
+      });
+      return next;
+    });
     setAnnotationsByPhotoId(
       Object.fromEntries(
         orderedPhotos.map((photo) => [
@@ -223,6 +239,13 @@ export function EntryWizard({ id }: { id: string }) {
     );
     setAnnotationDirtyByPhotoId({});
     setAnnotationSavedId(null);
+    setAnnotationUnlockedByPhotoId((current) => {
+      const next = { ...current };
+      orderedPhotos.forEach((photo) => {
+        if (next[photo.id] === undefined) next[photo.id] = Boolean(photo.final_fr);
+      });
+      return next;
+    });
 
     const selfNote = memoData.memos.find((memo) => memo.memo_type === "SELF_NOTE");
     if (!memoDraftTouched) setMemoDraft(selfNote?.content ?? "");
@@ -270,6 +293,9 @@ export function EntryWizard({ id }: { id: string }) {
     if (!activePhoto) return false;
     if (step === "draft") return true;
     if (step === "jp_edit" || step === "jp_confirm") return Boolean(activePhoto.jp_auto);
+    if (step === "annotations") {
+      return Boolean(activePhoto.final_fr) && Boolean(annotationUnlockedByPhotoId[activePhoto.id]);
+    }
     return Boolean(activePhoto.final_fr);
   }
 
@@ -355,11 +381,13 @@ export function EntryWizard({ id }: { id: string }) {
         current.map((photo) => (photo.id === updated.id ? { ...photo, ...updated } : photo)),
       );
       setFinalDraftByPhotoId((current) => ({ ...current, [updated.id]: updated.final_fr ?? "" }));
+      setGeneratedFinalByPhotoId((current) => ({ ...current, [updated.id]: updated.final_fr ?? "" }));
       setAnnotationsByPhotoId((current) => ({
         ...current,
         [updated.id]: emptyCorrectionAnnotations(updated.final_fr ?? ""),
       }));
       setAnnotationDirtyByPhotoId((current) => ({ ...current, [updated.id]: false }));
+      setAnnotationUnlockedByPhotoId((current) => ({ ...current, [updated.id]: false }));
       setStepByPhotoId((current) => ({ ...current, [updated.id]: "final" }));
       hintRequestedRef.current = entry?.id ?? id;
       void requestHints();
@@ -384,7 +412,7 @@ export function EntryWizard({ id }: { id: string }) {
         method: "PATCH",
         body: JSON.stringify({
           final_fr: activeFinalDraft,
-          ...(textChanged ? { learning_highlights: nextAnnotations } : {}),
+          learning_highlights: nextAnnotations,
         }),
       });
       setPhotos((current) =>
@@ -400,6 +428,8 @@ export function EntryWizard({ id }: { id: string }) {
       setAnnotationDirtyByPhotoId((current) => ({ ...current, [updated.id]: false }));
       setAnnotationSavedId(null);
       setFinalSavedId(updated.id);
+      setAnnotationUnlockedByPhotoId((current) => ({ ...current, [updated.id]: true }));
+      setStepByPhotoId((current) => ({ ...current, [updated.id]: "annotations" }));
       hintRequestedRef.current = entry?.id ?? id;
       void requestHints();
     } catch (err) {
@@ -746,6 +776,10 @@ export function EntryWizard({ id }: { id: string }) {
                         value={activeFinalDraft}
                         onChange={(event) => {
                           setFinalSavedId(null);
+                          setAnnotationUnlockedByPhotoId((current) => ({
+                            ...current,
+                            [activePhoto.id]: false,
+                          }));
                           setFinalDraftByPhotoId((current) => ({
                             ...current,
                             [activePhoto.id]: event.target.value,
@@ -757,35 +791,59 @@ export function EntryWizard({ id }: { id: string }) {
                     {activePhoto.status === "EXPORTED" ? (
                       <p className="field-meta editor-field-note">{t("出力済みのため編集できません。", "Ce texte ne peut plus être modifié après export.")}</p>
                     ) : (
-                      <button type="button" onClick={() => void saveFinalText()} disabled={finalSavingId === activePhoto.id || !activeFinalDraft.trim()}>
-                        {finalSavingId === activePhoto.id ? t("保存中…", "Enregistrement…") : t("最終フランス語を保存", "Enregistrer le français final")}
-                      </button>
+                      <div className="editor-card-actions editor-final-actions">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => {
+                            setFinalSavedId(null);
+                            setFinalDraftByPhotoId((current) => ({
+                              ...current,
+                              [activePhoto.id]: activeGeneratedFinal,
+                            }));
+                          }}
+                          disabled={activeFinalDraft === activeGeneratedFinal}
+                        >
+                          {t("元に戻す", "Rétablir la version générée")}
+                        </button>
+                        <button type="button" onClick={() => void saveFinalText()} disabled={finalSavingId === activePhoto.id || !activeFinalDraft.trim()}>
+                          {finalSavingId === activePhoto.id ? t("保存中…", "Enregistrement…") : t("最終フランス語を保存して次へ", "Enregistrer et continuer")}
+                        </button>
+                      </div>
                     )}
                     {finalSavedId === activePhoto.id ? <p className="badge">{t("保存しました", "Enregistré")}</p> : null}
                   </div>
                 }
               />
-              {activePhoto.final_fr && activeFinalDraft === activePhoto.final_fr ? (
-                <CorrectionAnnotationEditor
-                  text={activePhoto.final_fr}
-                  value={activeAnnotations}
-                  dirty={Boolean(annotationDirtyByPhotoId[activePhoto.id])}
-                  saving={annotationSavingId === activePhoto.id}
-                  saved={annotationSavedId === activePhoto.id}
-                  onChange={(next) => updateAnnotations(activePhoto.id, next)}
-                  onSave={() => void saveAnnotationsForPhoto(activePhoto.id)}
-                />
-              ) : (
-                <div className="card correction-annotation-pending">
+            </div>
+          ) : null}
+
+          {activeStep === "annotations" && activePhoto.final_fr ? (
+            <div className="editor-annotation-stage">
+              <div className="editor-card-heading editor-annotation-stage-heading">
+                <span className="editor-step-number">5</span>
+                <div>
                   <h2>{t("訂正ハイライト", "Repérage des corrections")}</h2>
-                  <p>
+                  <p className="timeline-detail">
                     {t(
-                      "最終フランス語を保存すると、範囲指定と色付けができます。文章を変更した場合、以前の指定は消去されます。",
-                      "Enregistrez d’abord le texte final pour définir les plages. Toute modification du texte efface les anciennes annotations.",
+                      "保存済みの最終フランス語に、訂正の種類と既知の範囲を指定します。",
+                      "Indiquez les types de correction et les passages déjà connus dans le texte final enregistré.",
                     )}
                   </p>
                 </div>
-              )}
+                <button type="button" className="btn-secondary" onClick={() => setActiveStep("final")}>
+                  {t("最終フランス語に戻る", "Revenir au français final")}
+                </button>
+              </div>
+              <CorrectionAnnotationEditor
+                text={activePhoto.final_fr}
+                value={activeAnnotations}
+                dirty={Boolean(annotationDirtyByPhotoId[activePhoto.id])}
+                saving={annotationSavingId === activePhoto.id}
+                saved={annotationSavedId === activePhoto.id}
+                onChange={(next) => updateAnnotations(activePhoto.id, next)}
+                onSave={() => void saveAnnotationsForPhoto(activePhoto.id)}
+              />
             </div>
           ) : null}
         </>
@@ -839,7 +897,7 @@ export function EntryWizard({ id }: { id: string }) {
         </div>
       ) : null}
 
-      <section className="card editor-export-card">
+      {showExportCard ? <section className="card editor-export-card">
         <div className="editor-card-heading">
           <h2>{t("提出用ファイル", "Fichiers à remettre")}</h2>
           <span className="badge">{exportReady ? t("出力可能", "Prêt") : t("未完了", "Incomplet")}</span>
@@ -865,7 +923,7 @@ export function EntryWizard({ id }: { id: string }) {
             {exportUrls.pdf ? <a href={exportUrls.pdf}>{t("PDFをダウンロード", "Télécharger le PDF")}</a> : null}
           </div>
         </div>
-      </section>
+      </section> : null}
 
       {error ? <p className="error">{error}</p> : null}
     </div>
