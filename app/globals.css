@@ -1916,7 +1916,8 @@ button[disabled] {
 }
 
 .correction-annotation-token-selected {
-    box-shadow: 0 0 0 2px #0f766e;
+    text-decoration: underline 2px #0f766e;
+    text-underline-offset: 0.22em;
 }
 
 .correction-highlight-useful-word {

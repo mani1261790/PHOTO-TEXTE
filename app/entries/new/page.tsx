@@ -538,7 +538,7 @@ export default function NewEntryPage() {
   return (
     <div className="page-stack new-entry-workspace">
       <header className="card panel-highlight new-entry-header">
-        <span className="eyebrow">{t("ステップ 1 / 5", "Étape 1 / 5")}</span>
+        <span className="eyebrow">{t("ステップ 1 / 6", "Étape 1 / 6")}</span>
         <h1>{t("写真とフランス語", "Photos et texte français")}</h1>
         <p>
           {t(
