@@ -4,9 +4,12 @@ import {
   addKnownRange,
   buildCorrectionAnnotationSegments,
   emptyCorrectionAnnotations,
+  expandAnnotationRangeToWords,
   normalizeCorrectionAnnotations,
   removeKnownRange,
   replaceHighlightRange,
+  toggleHighlightRange,
+  toggleKnownRange,
 } from "@/lib/learning/annotations";
 
 describe("manual correction annotations", () => {
@@ -41,6 +44,29 @@ describe("manual correction annotations", () => {
       { start: 0, end: 4 },
       { start: 10, end: 15 },
     ]);
+  });
+
+  it("expands an ordinary text selection to every touched French word", () => {
+    const text = "Je découvre l’école aujourd’hui.";
+
+    expect(expandAnnotationRangeToWords(text, 4, 20)).toEqual({ start: 3, end: 19 });
+    expect(expandAnnotationRangeToWords(text, 2, 3)).toBeNull();
+  });
+
+  it("removes a highlight when the same kind is applied twice", () => {
+    const range = { start: 3, end: 11 };
+    const applied = toggleHighlightRange([], range, "useful_verb");
+
+    expect(toggleHighlightRange(applied, range, "useful_verb")).toEqual([]);
+  });
+
+  it("keeps separately selected words in separate boxes and joins a multi-word selection", () => {
+    const separate = addKnownRange(addKnownRange([], { start: 0, end: 2 }), { start: 3, end: 7 });
+    expect(separate).toEqual([{ start: 0, end: 2 }, { start: 3, end: 7 }]);
+
+    const connected = addKnownRange(separate, { start: 0, end: 7 });
+    expect(connected).toEqual([{ start: 0, end: 7 }]);
+    expect(toggleKnownRange(connected, { start: 0, end: 7 })).toEqual([]);
   });
 
   it("drops stale and legacy annotations when the final text changes", () => {

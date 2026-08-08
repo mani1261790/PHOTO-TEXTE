@@ -23,7 +23,7 @@ type EntryStatus =
   | "FINAL_FR_READY"
   | "EXPORTED";
 
-type EditorStep = "draft" | "jp_edit" | "jp_confirm" | "final" | "annotations";
+type EditorStep = "draft" | "jp_edit" | "jp_confirm" | "final" | "annotations" | "submit";
 
 type Entry = {
   id: string;
@@ -188,6 +188,7 @@ export function EntryWizard({ id }: { id: string }) {
       { key: "jp_confirm" as const, label: t("3. 日本語を確定", "3. Valider le japonais") },
       { key: "final" as const, label: t("4. 最終フランス語", "4. Français final") },
       { key: "annotations" as const, label: t("5. 訂正ハイライト", "5. Repérage des corrections") },
+      { key: "submit" as const, label: t("6. 提出", "6. Remise") },
     ],
     [language],
   );
@@ -296,6 +297,7 @@ export function EntryWizard({ id }: { id: string }) {
     if (step === "annotations") {
       return Boolean(activePhoto.final_fr) && Boolean(annotationUnlockedByPhotoId[activePhoto.id]);
     }
+    if (step === "submit") return showExportCard;
     return Boolean(activePhoto.final_fr);
   }
 
@@ -471,6 +473,14 @@ export function EntryWizard({ id }: { id: string }) {
     }
   }
 
+  async function continueToSubmit(photoId: string) {
+    if (annotationDirtyByPhotoId[photoId]) {
+      const saved = await saveAnnotationsForPhoto(photoId);
+      if (!saved) return;
+    }
+    setStepByPhotoId((current) => ({ ...current, [photoId]: "submit" }));
+  }
+
   async function requestHints() {
     setHintLoading(true);
     setError(null);
@@ -588,7 +598,7 @@ export function EntryWizard({ id }: { id: string }) {
 
       {activePhoto ? (
         <>
-          <div className="editor-photo-toolbar" aria-label={t("写真の切り替え", "Navigation des photos")}>
+          {activeStep !== "submit" ? <div className="editor-photo-toolbar" aria-label={t("写真の切り替え", "Navigation des photos")}>
             <button
               type="button"
               className="btn-secondary editor-photo-arrow"
@@ -609,7 +619,7 @@ export function EntryWizard({ id }: { id: string }) {
             >
               {t("次の写真 →", "Photo suivante →")}
             </button>
-          </div>
+          </div> : null}
 
           {activeStep === "draft" ? (
             <div className="editor-stage-grid">
@@ -844,86 +854,114 @@ export function EntryWizard({ id }: { id: string }) {
                 onChange={(next) => updateAnnotations(activePhoto.id, next)}
                 onSave={() => void saveAnnotationsForPhoto(activePhoto.id)}
               />
+
+              <div className="editor-support-grid">
+                <section className="card editor-hints-card">
+                  <div className="editor-card-heading">
+                    <h2>{t("ヒント", "Conseils")}</h2>
+                    <span className="badge">{t("自動生成", "Générés automatiquement")}</span>
+                  </div>
+                  {hintLoading ? (
+                    <p>{t("ヒントを生成中…", "Génération des conseils…")}</p>
+                  ) : hintSuggestions.length ? (
+                    <ul className="editor-hint-list">
+                      {hintSuggestions.map((hint, index) => <li key={`${index}-${hint}`}>{hint}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="timeline-detail">{t("ヒントはまだありません。", "Aucun conseil pour le moment.")}</p>
+                  )}
+                  <button type="button" className="btn-secondary" onClick={() => void requestHints()} disabled={hintLoading}>
+                    {t("ヒントを再生成", "Regénérer les conseils")}
+                  </button>
+                </section>
+
+                <section className="card editor-notes-card">
+                  <div className="editor-card-heading">
+                    <h2>{t("手書きメモ", "Notes personnelles")}</h2>
+                    <span className="badge">{t("PPTX・PDFに出力", "Incluses dans le PPTX et le PDF")}</span>
+                  </div>
+                  <textarea
+                    rows={8}
+                    value={memoDraft}
+                    onChange={(event) => {
+                      setMemoDraft(event.target.value);
+                      setMemoDraftTouched(true);
+                      setMemoPendingSave(true);
+                    }}
+                    placeholder={t("ヒントを参考に、自分の言葉でメモを書いてください。", "Écrivez vos propres notes en vous aidant des conseils.")}
+                  />
+                  <div className="editor-card-actions">
+                    <button type="button" onClick={() => void saveSelfNote(memoDraft)} disabled={memoSaving || !memoPendingSave}>
+                      {memoSaving ? t("保存中…", "Enregistrement…") : t("メモを保存", "Enregistrer les notes")}
+                    </button>
+                    {!memoSaving && !memoPendingSave && memoSavedAt ? <span className="badge">{t("保存済み", "Enregistré")}</span> : null}
+                  </div>
+                </section>
+              </div>
+
+              <div className="editor-stage-next-row">
+                <button
+                  type="button"
+                  onClick={() => void continueToSubmit(activePhoto.id)}
+                  disabled={annotationSavingId === activePhoto.id || !showExportCard}
+                >
+                  {annotationDirtyByPhotoId[activePhoto.id]
+                    ? t("訂正ハイライトを保存して提出へ", "Enregistrer les annotations et passer à la remise")
+                    : t("提出へ進む", "Passer à la remise")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {activeStep === "submit" && showExportCard ? (
+            <div className="editor-submit-stage">
+              <div className="editor-card-heading editor-annotation-stage-heading">
+                <span className="editor-step-number">6</span>
+                <div>
+                  <h2>{t("提出", "Remise")}</h2>
+                  <p className="timeline-detail">
+                    {t(
+                      "完成した内容を、提出用のPPTXまたはPDFとして書き出します。",
+                      "Exportez le travail terminé au format PPTX ou PDF pour le remettre.",
+                    )}
+                  </p>
+                </div>
+                <button type="button" className="btn-secondary" onClick={() => setActiveStep("annotations")}>
+                  {t("訂正ハイライトに戻る", "Revenir aux annotations")}
+                </button>
+              </div>
+
+              <section className="card editor-export-card">
+                <div className="editor-card-heading">
+                  <h2>{t("提出用ファイル", "Fichiers à remettre")}</h2>
+                  <span className="badge">{t("出力可能", "Prêt")}</span>
+                </div>
+                <p className="timeline-detail">
+                  {t("すべての写真の最終文が完成しています。", "Tous les textes finaux sont prêts.")}
+                </p>
+                <div className="editor-export-formats">
+                  <div className="editor-export-format">
+                    <strong>PPTX</strong>
+                    <button type="button" onClick={() => void exportFile("pptx")} disabled={busy || !exportReady}>
+                      {exportingFormat === "pptx" ? t("生成中…", "Génération…") : t("PPTXを生成", "Générer le PPTX")}
+                    </button>
+                    {exportUrls.pptx ? <a href={exportUrls.pptx}>{t("PPTXをダウンロード", "Télécharger le PPTX")}</a> : null}
+                  </div>
+                  <div className="editor-export-format">
+                    <strong>PDF</strong>
+                    <button type="button" onClick={() => void exportFile("pdf")} disabled={busy || !exportReady}>
+                      {exportingFormat === "pdf" ? t("生成中…", "Génération…") : t("PDFを生成", "Générer le PDF")}
+                    </button>
+                    {exportUrls.pdf ? <a href={exportUrls.pdf}>{t("PDFをダウンロード", "Télécharger le PDF")}</a> : null}
+                  </div>
+                </div>
+              </section>
             </div>
           ) : null}
         </>
       ) : (
         <div className="card">{t("写真がありません。", "Aucune photo.")}</div>
       )}
-
-      {hasFinalText ? (
-        <div className="editor-support-grid">
-          <section className="card editor-hints-card">
-            <div className="editor-card-heading">
-              <h2>{t("ヒント", "Conseils")}</h2>
-              <span className="badge">{t("自動生成", "Générés automatiquement")}</span>
-            </div>
-            {hintLoading ? (
-              <p>{t("ヒントを生成中…", "Génération des conseils…")}</p>
-            ) : hintSuggestions.length ? (
-              <ul className="editor-hint-list">
-                {hintSuggestions.map((hint, index) => <li key={`${index}-${hint}`}>{hint}</li>)}
-              </ul>
-            ) : (
-              <p className="timeline-detail">{t("ヒントはまだありません。", "Aucun conseil pour le moment.")}</p>
-            )}
-            <button type="button" className="btn-secondary" onClick={() => void requestHints()} disabled={hintLoading}>
-              {t("ヒントを再生成", "Regénérer les conseils")}
-            </button>
-          </section>
-
-          <section className="card editor-notes-card">
-            <div className="editor-card-heading">
-              <h2>{t("手書きメモ", "Notes personnelles")}</h2>
-              <span className="badge">{t("PPTX・PDFに出力", "Incluses dans le PPTX et le PDF")}</span>
-            </div>
-            <textarea
-              rows={8}
-              value={memoDraft}
-              onChange={(event) => {
-                setMemoDraft(event.target.value);
-                setMemoDraftTouched(true);
-                setMemoPendingSave(true);
-              }}
-              placeholder={t("ヒントを参考に、自分の言葉でメモを書いてください。", "Écrivez vos propres notes en vous aidant des conseils.")}
-            />
-            <div className="editor-card-actions">
-              <button type="button" onClick={() => void saveSelfNote(memoDraft)} disabled={memoSaving || !memoPendingSave}>
-                {memoSaving ? t("保存中…", "Enregistrement…") : t("メモを保存", "Enregistrer les notes")}
-              </button>
-              {!memoSaving && !memoPendingSave && memoSavedAt ? <span className="badge">{t("保存済み", "Enregistré")}</span> : null}
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {showExportCard ? <section className="card editor-export-card">
-        <div className="editor-card-heading">
-          <h2>{t("提出用ファイル", "Fichiers à remettre")}</h2>
-          <span className="badge">{exportReady ? t("出力可能", "Prêt") : t("未完了", "Incomplet")}</span>
-        </div>
-        <p className="timeline-detail">
-          {exportReady
-            ? t("すべての写真の最終文が完成しています。", "Tous les textes finaux sont prêts.")
-            : t("すべての写真で最終フランス語まで完了してください。", "Terminez le français final pour chaque photo.")}
-        </p>
-        <div className="editor-export-formats">
-          <div className="editor-export-format">
-            <strong>PPTX</strong>
-            <button type="button" onClick={() => void exportFile("pptx")} disabled={busy || !exportReady}>
-              {exportingFormat === "pptx" ? t("生成中…", "Génération…") : t("PPTXを生成", "Générer le PPTX")}
-            </button>
-            {exportUrls.pptx ? <a href={exportUrls.pptx}>{t("PPTXをダウンロード", "Télécharger le PPTX")}</a> : null}
-          </div>
-          <div className="editor-export-format">
-            <strong>PDF</strong>
-            <button type="button" onClick={() => void exportFile("pdf")} disabled={busy || !exportReady}>
-              {exportingFormat === "pdf" ? t("生成中…", "Génération…") : t("PDFを生成", "Générer le PDF")}
-            </button>
-            {exportUrls.pdf ? <a href={exportUrls.pdf}>{t("PDFをダウンロード", "Télécharger le PDF")}</a> : null}
-          </div>
-        </div>
-      </section> : null}
 
       {error ? <p className="error">{error}</p> : null}
     </div>

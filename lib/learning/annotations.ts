@@ -99,6 +99,31 @@ export function replaceHighlightRange(
   return mergeAdjacentHighlights(next);
 }
 
+function rangeIsCoveredBy<T extends TextRange>(
+  ranges: T[],
+  selection: TextRange,
+  predicate: (range: T) => boolean = () => true,
+): boolean {
+  let coveredUntil = selection.start;
+  for (const range of [...ranges].sort((a, b) => a.start - b.start || a.end - b.end)) {
+    if (!predicate(range) || range.end <= coveredUntil) continue;
+    if (range.start > coveredUntil) return false;
+    coveredUntil = Math.max(coveredUntil, range.end);
+    if (coveredUntil >= selection.end) return true;
+  }
+  return false;
+}
+
+export function toggleHighlightRange(
+  ranges: CorrectionHighlightRange[],
+  selection: TextRange,
+  kind: CorrectionHighlightKind,
+): CorrectionHighlightRange[] {
+  return rangeIsCoveredBy(ranges, selection, (range) => range.kind === kind)
+    ? removeHighlightRange(ranges, selection)
+    : replaceHighlightRange(ranges, selection, kind);
+}
+
 export function removeHighlightRange(
   ranges: CorrectionHighlightRange[],
   selection: TextRange,
@@ -135,6 +160,12 @@ export function addKnownRange(ranges: TextRange[], selection: TextRange): TextRa
   return next.sort((a, b) => a.start - b.start);
 }
 
+export function toggleKnownRange(ranges: TextRange[], selection: TextRange): TextRange[] {
+  return rangeIsCoveredBy(ranges, selection)
+    ? removeKnownRange(ranges, selection)
+    : addKnownRange(ranges, selection);
+}
+
 export function removeKnownRange(ranges: TextRange[], selection: TextRange): TextRange[] {
   const next: TextRange[] = [];
   for (const range of ranges) {
@@ -158,6 +189,33 @@ export function trimAnnotationRange(
   while (safeStart < safeEnd && /\s/.test(text[safeStart])) safeStart += 1;
   while (safeEnd > safeStart && /\s/.test(text[safeEnd - 1])) safeEnd -= 1;
   return safeEnd > safeStart ? { start: safeStart, end: safeEnd } : null;
+}
+
+const annotationWordPattern = /[\p{L}\p{N}]+(?:[’'\-][\p{L}\p{N}]+)*/gu;
+
+export function expandAnnotationRangeToWords(
+  text: string,
+  start: number,
+  end: number,
+): TextRange | null {
+  const safeStart = Math.max(0, Math.min(start, text.length));
+  const safeEnd = Math.max(safeStart, Math.min(end, text.length));
+  if (safeEnd <= safeStart) return null;
+
+  let firstStart: number | null = null;
+  let lastEnd: number | null = null;
+  for (const match of text.matchAll(annotationWordPattern)) {
+    const wordStart = match.index;
+    const wordEnd = wordStart + match[0].length;
+    if (wordStart >= safeEnd) break;
+    if (wordEnd <= safeStart) continue;
+    if (firstStart === null) firstStart = wordStart;
+    lastEnd = wordEnd;
+  }
+
+  return firstStart !== null && lastEnd !== null
+    ? { start: firstStart, end: lastEnd }
+    : null;
 }
 
 export function normalizeCorrectionAnnotations(
