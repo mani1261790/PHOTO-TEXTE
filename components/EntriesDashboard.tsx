@@ -355,7 +355,7 @@ export function EntriesDashboard() {
 
       {error ? <p className="error">{error}</p> : null}
 
-      <div className="card">
+      <div className="card entries-list-shell">
         <div className="list-toolbar">
           <label>
             {t('検索', 'Recherche')}

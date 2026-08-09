@@ -2017,3 +2017,467 @@ button[disabled] {
         grid-column: 1;
     }
 }
+
+/* Mobile workspaces use one visual surface per task. Nested sections rely on
+   dividers and tone instead of repeatedly shrinking the available width. */
+@media (max-width: 760px) {
+    main {
+        padding: 14px 12px 88px;
+    }
+
+    .page-stack,
+    .editor-page,
+    .new-entry-workspace {
+        gap: 12px;
+    }
+
+    .page-stack > .card {
+        margin-bottom: 0;
+    }
+
+    .card {
+        padding: 14px;
+        border-radius: 14px;
+    }
+
+    .panel-highlight {
+        box-shadow: none;
+    }
+
+    .fab-add {
+        right: 12px;
+        bottom: 16px;
+        width: 52px;
+        height: 52px;
+        min-height: 48px;
+        justify-content: center;
+        padding: 0;
+    }
+
+    .fab-add-text {
+        display: none;
+    }
+
+    /* Entry list: filters and each entry are siblings; expanded content is flat. */
+    .entries-list-shell {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .entries-list-shell .list-toolbar {
+        margin-bottom: 12px;
+        padding: 14px;
+        border: 1px solid var(--theme-border);
+        border-radius: 14px;
+        background: var(--theme-surface);
+        box-shadow: 0 2px 10px #1018280d;
+    }
+
+    .entries-list-shell .list-toolbar label:last-child select {
+        margin-bottom: 0;
+    }
+
+    .entry-list {
+        gap: 10px;
+    }
+
+    .accordion-card {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .accordion-head {
+        min-height: 64px;
+        padding: 12px 14px;
+    }
+
+    .accordion-head::after {
+        content: "⌄";
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        color: var(--theme-primary-pressed);
+        background: var(--theme-soft);
+        font-size: 18px;
+        line-height: 1;
+        transition: transform 160ms ease;
+    }
+
+    .accordion-card[open] > .accordion-head {
+        border-bottom: 1px solid var(--theme-border);
+        background: #f8fbfc;
+    }
+
+    .accordion-card[open] > .accordion-head::after {
+        transform: rotate(180deg);
+    }
+
+    .accordion-body {
+        margin: 0;
+        padding: 0 14px 14px;
+        overflow: visible;
+    }
+
+    .accordion-body h4 {
+        margin: 14px 0 0;
+        font-size: 15px;
+    }
+
+    .entry-photo-strip {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+        padding: 0;
+        overflow: visible;
+        scroll-snap-type: none;
+    }
+
+    .entry-photo-card {
+        width: 100%;
+        min-width: 0;
+        display: grid;
+        grid-template-columns: 88px minmax(0, 1fr);
+        align-items: start;
+        gap: 8px 12px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--theme-border);
+        scroll-snap-align: none;
+    }
+
+    .entry-photo-card:last-child {
+        border-bottom: 0;
+    }
+
+    .entry-photo-media {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        gap: 5px;
+    }
+
+    .entry-thumb {
+        aspect-ratio: 1;
+        border-radius: 9px;
+    }
+
+    .entry-photo-media .badge {
+        width: 100%;
+        padding: 2px 6px;
+        text-align: center;
+    }
+
+    .entry-photo-copy {
+        grid-column: 2;
+        margin: 0;
+        font-size: max(12px, var(--minimum-font-size));
+        line-height: 1.55;
+    }
+
+    .entry-photo-tools {
+        grid-column: 2;
+        margin: 0;
+    }
+
+    .entry-diff-btn {
+        width: 100%;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    .entry-photo-diff {
+        grid-column: 1 / -1;
+        margin: 4px 0 0;
+    }
+
+    .entry-diff-comparison {
+        gap: 8px;
+    }
+
+    .entry-diff-panel {
+        padding: 10px 12px;
+        border-width: 0 0 0 3px;
+        border-radius: 0;
+    }
+
+    .entry-diff-text {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .entry-actions {
+        margin-top: 2px;
+        padding-top: 14px;
+        border-top: 1px solid var(--theme-border);
+    }
+
+    .entry-delete-icon {
+        width: 44px;
+        height: 44px;
+        min-height: 44px;
+    }
+
+    /* New entry: one form surface with divided photo and copy sections. */
+    .new-entry-header {
+        padding: 16px;
+    }
+
+    .new-entry-header h1 {
+        font-size: 28px;
+        line-height: 1.2;
+    }
+
+    .new-entry-form {
+        gap: 0;
+        padding: 14px;
+        border: 1px solid var(--theme-border);
+        border-radius: 14px;
+        background: var(--theme-surface);
+        box-shadow: 0 2px 10px #1018280d;
+    }
+
+    .new-entry-stage-grid {
+        display: block;
+    }
+
+    .new-entry-stage-grid .editor-stage-card {
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .new-entry-stage-grid .editor-stage-card + .editor-stage-card {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--theme-border);
+    }
+
+    .new-entry-stage-grid .editor-step-number {
+        display: none;
+    }
+
+    .new-entry-file-picker {
+        margin-bottom: 12px;
+    }
+
+    .new-entry-photo-tabs {
+        flex-wrap: nowrap;
+        padding-bottom: 2px;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .new-entry-photo-tabs button {
+        flex: 0 0 auto;
+        min-height: 44px;
+    }
+
+    .new-entry-photo-toolbar {
+        margin: 18px 0 0;
+    }
+
+    .new-entry-actions {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--theme-border);
+    }
+
+    /* Editor: compact horizontal steps and one content surface per step. */
+    .editor-workspace-header {
+        gap: 12px;
+        overflow: hidden;
+    }
+
+    .editor-title-row h1 {
+        font-size: 23px;
+    }
+
+    .editor-stepper {
+        display: flex;
+        gap: 8px;
+        padding: 1px 0 5px;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+    }
+
+    .editor-step {
+        width: auto;
+        min-height: 44px;
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 8px 12px;
+        border-radius: 999px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .editor-photo-toolbar {
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 8px;
+        padding: 8px 0;
+        border-width: 1px 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .editor-photo-position {
+        grid-column: auto;
+        grid-row: auto;
+    }
+
+    .editor-photo-arrow {
+        min-width: 0;
+        min-height: 44px;
+        grid-row: auto;
+        padding: 8px;
+    }
+
+    .editor-stage-grid:not(.new-entry-stage-grid) {
+        display: block;
+        padding: 14px;
+        border: 1px solid var(--theme-border);
+        border-radius: 14px;
+        background: var(--theme-surface);
+        box-shadow: 0 2px 10px #1018280d;
+    }
+
+    .editor-stage-grid .editor-stage-card {
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .editor-stage-grid .editor-stage-card + .editor-stage-card {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--theme-border);
+    }
+
+    .editor-stage-grid .editor-step-number {
+        display: none;
+    }
+
+    .editor-photo-preview {
+        min-height: 0;
+        max-height: 280px;
+    }
+
+    .editor-source-text,
+    .editor-comparison-text {
+        padding: 12px;
+        border-radius: 10px;
+    }
+
+    .editor-final-stage {
+        padding: 14px;
+        box-shadow: 0 2px 10px #1018280d;
+    }
+
+    .editor-final-stage .entry-diff-panel {
+        padding: 12px;
+    }
+
+    .editor-annotation-stage,
+    .editor-submit-stage {
+        gap: 0;
+        padding: 14px;
+        border: 1px solid var(--theme-border);
+        border-radius: 14px;
+        background: var(--theme-surface);
+        box-shadow: 0 2px 10px #1018280d;
+    }
+
+    .editor-annotation-stage-heading {
+        margin: 0;
+        padding: 0 0 14px;
+        border: 0;
+        border-bottom: 1px solid var(--theme-border);
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .correction-annotation-editor {
+        margin: 0;
+        padding: 16px 0 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .correction-annotation-toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .annotation-action {
+        min-height: 68px;
+        margin: 0;
+        padding: 10px;
+    }
+
+    .correction-annotation-surface {
+        padding: 14px;
+        border-radius: 10px;
+    }
+
+    .editor-support-grid {
+        display: block;
+    }
+
+    .editor-support-grid .card {
+        margin: 16px 0 0;
+        padding: 16px 0 0;
+        border: 0;
+        border-top: 1px solid var(--theme-border);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .editor-stage-next-row {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--theme-border);
+    }
+
+    .editor-export-card {
+        margin: 0;
+        padding: 16px 0 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .editor-export-formats {
+        gap: 0;
+        margin-top: 12px;
+    }
+
+    .editor-export-format {
+        padding: 12px 0;
+        border-width: 1px 0 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .editor-export-format:first-child {
+        border-top: 0;
+    }
+}
