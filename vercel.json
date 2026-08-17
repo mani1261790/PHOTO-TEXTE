@@ -1,8 +1,10 @@
 {
-  "crons": [
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
     {
-      "path": "/api/internal/supabase-keepalive",
-      "schedule": "0 3 * * *"
+      "source": "/:path*",
+      "destination": "https://phototexte.noema-learn.uk/:path*",
+      "permanent": false
     }
   ]
 }
