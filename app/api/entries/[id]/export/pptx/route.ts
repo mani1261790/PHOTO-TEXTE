@@ -4,7 +4,7 @@ import { parseJson } from '@/lib/api/parse';
 import { handleApiError, ok } from '@/lib/api/response';
 import { exportSchema } from '@/lib/api/schemas';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 import { runExportWorkflow } from '@/lib/workflows/export';
 
 export async function POST(
@@ -22,7 +22,8 @@ export async function POST(
       client,
       userId: user.id,
       entryId: id,
-      includeMemos: Boolean(payload.include_memos)
+      includeMemos: Boolean(payload.include_memos),
+      format: 'pptx'
     });
 
     return ok(result);

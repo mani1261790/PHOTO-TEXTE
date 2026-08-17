@@ -1,4 +1,4 @@
-import { clearAccessToken, getAccessToken } from '@/lib/auth/token-store';
+import { clearAccessToken } from '@/lib/auth/token-store';
 
 function handleAuthRedirect(code?: string, status?: number): boolean {
   if (!code && status !== 401 && status !== 403) {
@@ -21,19 +21,18 @@ export async function apiFetch<T>(
   url: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const token = getAccessToken();
   const headers = new Headers(init.headers || {});
   headers.set('content-type', headers.get('content-type') ?? 'application/json');
-  if (token) {
-    headers.set('authorization', `Bearer ${token}`);
-  }
 
   const response = await fetch(url, {
     ...init,
-    headers
+    headers,
+    credentials: 'same-origin'
   });
 
-  const json = await response.json().catch(() => ({}));
+  const json = await response.json().catch(() => ({})) as {
+    error?: { code?: string; message?: string };
+  };
   if (!response.ok) {
     if (handleAuthRedirect(json?.error?.code, response.status)) {
       throw new Error('');
@@ -46,19 +45,18 @@ export async function apiFetch<T>(
 }
 
 export async function apiFetchForm<T>(url: string, formData: FormData): Promise<T> {
-  const token = getAccessToken();
   const headers = new Headers();
-  if (token) {
-    headers.set('authorization', `Bearer ${token}`);
-  }
 
   const response = await fetch(url, {
     method: 'POST',
     body: formData,
-    headers
+    headers,
+    credentials: 'same-origin'
   });
 
-  const json = await response.json().catch(() => ({}));
+  const json = await response.json().catch(() => ({})) as {
+    error?: { code?: string; message?: string };
+  };
   if (!response.ok) {
     if (handleAuthRedirect(json?.error?.code, response.status)) {
       throw new Error('');

@@ -37,7 +37,7 @@ const codeToJaMessage: Record<string, string> = {
   EXPORT_NOT_FOUND: 'ダウンロードトークンが見つかりません。',
   EXPORT_EXPIRED: 'ダウンロードトークンの有効期限が切れています。',
   EXPORT_DOWNLOAD_FAILED: 'エクスポートのダウンロードに失敗しました。',
-  EXPORT_UPLOAD_FAILED: 'PPTXファイル保存に失敗しました。',
+  EXPORT_UPLOAD_FAILED: '提出ファイルの保存に失敗しました。',
   EXPORT_DB_FAILED: 'エクスポート情報の登録に失敗しました。',
   ENTRY_NOT_READY: 'エクスポート前に最終文の生成が必要です。',
   ENTRY_STATUS: '現在の状態ではエクスポートできません。',
