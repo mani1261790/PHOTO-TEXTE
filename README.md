@@ -87,12 +87,15 @@ npm run cf:build
 - `ASSETS`: OpenNext静的アセット
 - `WORKER_SELF_REFERENCE`: OpenNext自己参照サービス
 
-productionとdevは、Worker・D1・R2を共有しません。
+productionとdevはWorkerだけを分け、利用者と保存データを揃えるためD1・R2を共有します。
 
 | 環境 | Worker | D1 | R2 |
 | --- | --- | --- | --- |
 | production | `photo-texte` | `photo-texte` | `photo-texte-content` |
-| dev | `photo-texte-dev` | `photo-texte-dev` | `photo-texte-dev-content` |
+| dev | `photo-texte-dev` | `photo-texte` | `photo-texte-content` |
+
+本番URLは `https://phototexte.noema-learn.uk` です。旧Vercel URLは同じパスを
+本番URLへ一時リダイレクトします。devは引き続き `workers.dev` を使用します。
 
 GitHubに残っているVercel PreviewはNext.jsのビルド確認には使えますが、D1/R2の
 Cloudflareバインディングがないため、API・ログインの動作確認先にはしません。

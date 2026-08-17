@@ -3,12 +3,19 @@
   "name": "photo-texte",
   "account_id": "2ea670c2a6ff28e248ef084adf095e8b",
   "main": ".open-next/worker.js",
+  "workers_dev": true,
   "compatibility_date": "2026-08-06",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "routes": [
+    {
+      "pattern": "phototexte.noema-learn.uk",
+      "custom_domain": true
+    }
+  ],
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
@@ -30,7 +37,7 @@
     }
   ],
   "vars": {
-    "BETTER_AUTH_URL": "https://photo-texte.mani1261790.workers.dev",
+    "BETTER_AUTH_URL": "https://phototexte.noema-learn.uk",
     "OPENAI_MODEL": "gpt-4o-mini",
     "PHOTO_BUCKET": "photos",
     "EXPORT_BUCKET": "exports"
