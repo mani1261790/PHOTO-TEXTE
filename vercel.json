@@ -2,6 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "redirects": [
     {
+      "source": "/",
+      "destination": "https://phototexte.noema-learn.uk/",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "destination": "https://phototexte.noema-learn.uk/:path*",
       "permanent": false
