@@ -1,4 +1,7 @@
 .next
+.open-next
+.wrangler
+worker-configuration.d.ts
 node_modules
 .env
 .env.local

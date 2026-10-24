@@ -4,7 +4,7 @@ import { badRequest } from '@/lib/api/errors';
 import { parseJson } from '@/lib/api/parse';
 import { handleApiError, ok } from '@/lib/api/response';
 import { updateEntryPhotoSchema } from '@/lib/api/schemas';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 /**
  * PATCH /api/entries/:id/photos/:photoId

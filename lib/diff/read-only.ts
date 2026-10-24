@@ -23,3 +23,14 @@ export function computeReadOnlyDiff(before: string, after: string): ReadOnlyDiff
     tokens
   };
 }
+
+export function reconstructDiffSides(tokens: DiffToken[]): Pick<ReadOnlyDiff, 'before' | 'after'> {
+  return tokens.reduce(
+    (result, token) => {
+      if (token.kind !== 'add') result.before += token.value;
+      if (token.kind !== 'remove') result.after += token.value;
+      return result;
+    },
+    { before: '', after: '' }
+  );
+}

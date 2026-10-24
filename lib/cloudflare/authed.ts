@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
 
 import { requireAuth } from '@/lib/auth/session';
-import { createAnonClient } from '@/lib/supabase/client';
+import { createUserClient } from '@/lib/cloudflare/client';
 
 export async function authedClient(req: NextRequest) {
   const user = await requireAuth(req);
-  const client = createAnonClient(user.accessToken);
+  const client = await createUserClient(user.id);
   return { user, client };
 }

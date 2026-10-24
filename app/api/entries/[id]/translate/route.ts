@@ -5,7 +5,7 @@ import { handleApiError, ok } from '@/lib/api/response';
 import { translateFrToJa } from '@/lib/ai/client';
 import { assertDraftMutable } from '@/lib/entries/state';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 export async function POST(
   req: NextRequest,

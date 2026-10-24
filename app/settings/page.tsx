@@ -5,7 +5,6 @@ import { FormEvent, useEffect, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
 import { clearAccessToken } from '@/lib/auth/token-store';
-import { serviceLanguageLabels } from '@/lib/i18n';
 import { useLanguage } from '@/components/LanguageProvider';
 
 type Profile = {
@@ -18,7 +17,7 @@ type Profile = {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { language, setLanguage } = useLanguage();
+  const { language } = useLanguage();
   const t = (ja: string, fr: string) => (language === 'fr' ? fr : ja);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +38,7 @@ export default function SettingsPage() {
     try {
       const updated = await apiFetch<Profile>('/api/me', {
         method: 'PUT',
-        body: JSON.stringify(profile)
+        body: JSON.stringify({ ...profile, service_language: language })
       });
       setProfile(updated);
       router.push('/');
@@ -148,23 +147,6 @@ export default function SettingsPage() {
             </select>
             <span className="field-meta">
               {t('学習中の目標レベルを選択してください。', 'Choisissez votre niveau cible.')}
-            </span>
-          </label>
-          <label>
-            {t('サービスの言語', 'Langue du service')}
-            <select
-              value={profile.service_language}
-              onChange={(e) => {
-                const next = e.target.value as Profile['service_language'];
-                setProfile({ ...profile, service_language: next });
-                setLanguage(next);
-              }}
-            >
-              <option value="ja">{serviceLanguageLabels.ja}</option>
-              <option value="fr">{serviceLanguageLabels.fr}</option>
-            </select>
-            <span className="field-meta">
-              {t('画面表示の言語を切り替えます。', "Change la langue de l'interface.")}
             </span>
           </label>
           <button type="submit" disabled={saving}>

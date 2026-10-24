@@ -66,39 +66,21 @@ function LoginContent() {
         body: JSON.stringify(body)
       });
 
-      const json = await response.json().catch(() => ({}));
+      const json = await response.json().catch(() => ({})) as {
+        authenticated?: boolean;
+        error?: { message?: string };
+      };
       if (!response.ok) {
         setError(json?.error?.message ?? t('認証に失敗しました。', "Échec de l'authentification."));
         return;
       }
 
-      if (!json.access_token) {
-        if (mode === 'signup') {
-          setNotice(
-            json.password_reset_requested
-              ? t(
-                  'このメールアドレスは登録済みです。パスワード再設定メールを送信しました。メール内のリンクから何度でも再設定できます。',
-                  "Cette adresse e-mail est déjà inscrite. Un e-mail de réinitialisation a été envoyé ; vous pouvez réinitialiser autant de fois que nécessaire via ce lien."
-                )
-              : t(
-                  '確認メールを送信しました。メール内のリンクで確認を完了した後、この画面でログインしてください。',
-                  "E-mail de confirmation envoyé. Ouvrez le lien, puis connectez-vous ici."
-                )
-          );
-          switchMode('login');
-          return;
-        }
-
-        setError(
-          t(
-            'アクセストークンを取得できませんでした。しばらくしてから再度お試しください。',
-            "Impossible d'obtenir le jeton. Réessayez plus tard."
-          )
-        );
+      if (!json.authenticated) {
+        setError(t('認証を完了できませんでした。', "Impossible de terminer l'authentification."));
         return;
       }
 
-      setAccessToken(json.access_token);
+      setAccessToken('cookie-session');
       await routeAfterLogin();
     } finally {
       setBusy(false);

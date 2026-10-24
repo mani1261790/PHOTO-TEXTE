@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 
 import { badRequest } from '@/lib/api/errors';
 import { handleApiError, ok } from '@/lib/api/response';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 /**
  * GET /api/entries/:id/photos
