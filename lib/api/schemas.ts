@@ -1,13 +1,25 @@
 import { z } from "zod";
 
-const learningHighlightKindSchema = z.enum(["none", "grammar", "known", "unknown"]);
+const textRangeSchema = z.object({
+  start: z.number().int().nonnegative(),
+  end: z.number().int().positive(),
+}).refine((range) => range.end > range.start, {
+  message: "Range end must be greater than start",
+});
+
+const correctionHighlightRangeSchema = z.object({
+  start: z.number().int().nonnegative(),
+  end: z.number().int().positive(),
+  kind: z.enum(["useful_word", "useful_verb", "grammar"]),
+}).refine((range) => range.end > range.start, {
+  message: "Range end must be greater than start",
+});
 
 const learningHighlightsSchema = z.object({
-  knownWords: z.array(z.string().min(1)).default([]),
-  unknownWords: z.array(z.string().min(1)).default([]),
-  grammarWords: z.array(z.string().min(1)).default([]),
-  tokenSignature: z.string().optional().nullable(),
-  wordClassByKey: z.record(z.string(), learningHighlightKindSchema).optional(),
+  version: z.literal(2),
+  textSignature: z.string().min(1).max(120),
+  highlights: z.array(correctionHighlightRangeSchema).max(500),
+  knownRanges: z.array(textRangeSchema).max(200),
 });
 
 export const profileUpdateSchema = z.object({
@@ -16,6 +28,10 @@ export const profileUpdateSchema = z.object({
   grammatical_gender: z.enum(["male", "female", "neutral", "auto"]),
   cefr_level: z.enum(["A1", "A2", "B1", "B2", "C1", "C2"]),
   politeness_pref: z.string().max(32).optional().nullable(),
+  service_language: z.enum(["ja", "fr"]),
+});
+
+export const profileLanguageUpdateSchema = z.object({
   service_language: z.enum(["ja", "fr"]),
 });
 

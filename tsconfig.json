@@ -19,7 +19,8 @@
     "incremental": true,
     "types": [
       "node",
-      "vitest/globals"
+      "vitest/globals",
+      "@cloudflare/workers-types"
     ],
     "paths": {
       "@/*": [
@@ -40,6 +41,7 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "worker-configuration.d.ts"
   ]
 }

@@ -2,96 +2,74 @@ import { NextRequest } from 'next/server';
 
 import { badRequest } from '@/lib/api/errors';
 import { parseJson } from '@/lib/api/parse';
-import { handleApiError, ok } from '@/lib/api/response';
+import { handleApiError } from '@/lib/api/response';
 import { signupSchema } from '@/lib/api/schemas';
 import { encryptField, generateDataKey, wrapDataKey } from '@/lib/crypto/envelope';
-import { createAnonClient, createServiceClient } from '@/lib/supabase/client';
+import { createAuth } from '@/lib/auth/better-auth';
+import { createServiceClient } from '@/lib/cloudflare/client';
+import { getAppEnv } from '@/lib/cloudflare/context';
 
 export async function POST(req: NextRequest) {
   try {
     const payload = await parseJson(req, signupSchema);
-    const anon = createAnonClient();
-
-    const signUpResult = await anon.auth.signUp({
-      email: payload.email,
-      password: payload.password
+    const auth = await createAuth();
+    const response = await auth.api.signUpEmail({
+      body: {
+        email: payload.email,
+        password: payload.password,
+        name: payload.display_name?.trim() || payload.email.split('@')[0]
+      },
+      headers: req.headers,
+      asResponse: true
     });
 
-    const signUpErrorCode = signUpResult.error?.code?.toLowerCase() ?? '';
-    const signUpErrorMessage = signUpResult.error?.message?.toLowerCase() ?? '';
-    const isAlreadyRegistered =
-      signUpErrorCode === 'user_already_exists' ||
-      signUpErrorCode === 'email_exists' ||
-      signUpErrorMessage.includes('already registered') ||
-      signUpErrorMessage.includes('already exists');
-
-    if (isAlreadyRegistered) {
-      const resetResult = await anon.auth.resetPasswordForEmail(payload.email);
-      if (resetResult.error) {
-        badRequest('PASSWORD_RESET_FAILED', 'Unable to send password reset email');
-      }
-
-      return ok({
-        user_id: null,
-        access_token: null,
-        refresh_token: null,
-        email_confirmation_required: true,
-        password_reset_requested: true
-      });
-    }
-
-    if (signUpResult.error || !signUpResult.data.user) {
+    if (!response.ok) {
       badRequest('SIGNUP_FAILED', 'Unable to create account');
     }
 
-    const user = signUpResult.data.user;
-    const session = signUpResult.data.session ?? null;
-    const dataKey = generateDataKey();
-    const wrappedDataKey = wrapDataKey(dataKey);
-    const emailEncrypted = encryptField(dataKey, payload.email);
+    const signUpResult = await response.json() as { user?: { id?: string } };
+    const userId = signUpResult.user?.id;
+    if (!userId) badRequest('SIGNUP_FAILED', 'Unable to create account');
 
-    const service = createServiceClient();
-    const baseProfilePayload = {
-      id: user.id,
-      email_encrypted: emailEncrypted,
-      wrapped_data_key: wrappedDataKey,
-      display_name: payload.display_name ?? null,
-      grammatical_gender: payload.grammatical_gender,
-      cefr_level: payload.cefr_level,
-      politeness_pref: payload.politeness_pref ?? null
-    };
+    try {
+      const dataKey = generateDataKey();
+      const wrappedDataKey = wrapDataKey(dataKey);
+      const emailEncrypted = encryptField(dataKey, payload.email);
 
-    // NOTE:
-    // - Newer schema has `service_language`, older instances may not.
-    // - `upsert` keeps signup idempotent when user_profiles row already exists.
-    let { error: profileError } = await service.from('user_profiles').upsert(
-      {
-        ...baseProfilePayload,
-        service_language: payload.service_language
-      },
-      { onConflict: 'id' }
-    );
+      const service = await createServiceClient();
+      const baseProfilePayload = {
+        id: userId,
+        email_encrypted: emailEncrypted,
+        wrapped_data_key: wrappedDataKey,
+        display_name: payload.display_name ?? null,
+        grammatical_gender: payload.grammatical_gender,
+        cefr_level: payload.cefr_level,
+        politeness_pref: payload.politeness_pref ?? null
+      };
 
-    if (
-      profileError &&
-      /service_language/i.test(profileError.message) &&
-      /(column|schema cache)/i.test(profileError.message)
-    ) {
-      ({ error: profileError } = await service
-        .from('user_profiles')
-        .upsert(baseProfilePayload, { onConflict: 'id' }));
+      const { error: profileError } = await service.from('user_profiles').insert(
+        {
+          ...baseProfilePayload,
+          service_language: payload.service_language
+        }
+      );
+
+      if (profileError) {
+        badRequest('PROFILE_CREATE_FAILED', 'Unable to initialize profile');
+      }
+    } catch (error) {
+      const env = await getAppEnv();
+      await env.DB.prepare('DELETE FROM "user" WHERE id = ?').bind(userId).run();
+      throw error;
     }
 
-    if (profileError) {
-      badRequest('PROFILE_CREATE_FAILED', 'Unable to initialize profile');
-    }
-
-    return ok({
-      user_id: user.id,
-      access_token: session?.access_token ?? null,
-      refresh_token: session?.refresh_token ?? null,
-      email_confirmation_required: session == null
-    }, 201);
+    const headers = new Headers(response.headers);
+    headers.set('content-type', 'application/json; charset=utf-8');
+    return new Response(JSON.stringify({
+      user_id: userId,
+      authenticated: true,
+      email_confirmation_required: false
+    }), { status: 201, headers });
   } catch (error) {
     return handleApiError(error);
   }

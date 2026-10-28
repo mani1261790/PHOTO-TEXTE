@@ -6,8 +6,8 @@ import { handleApiError, ok } from "@/lib/api/response";
 import { updateEntrySchema } from "@/lib/api/schemas";
 import { assertDraftMutable } from "@/lib/entries/state";
 import { exportBucket, photoBucket } from "@/lib/storage/buckets";
-import { authedClient } from "@/lib/supabase/authed";
-import { createServiceClient } from "@/lib/supabase/client";
+import { authedClient } from "@/lib/cloudflare/authed";
+import { createServiceClient } from "@/lib/cloudflare/client";
 
 export async function GET(
   req: NextRequest,
@@ -94,7 +94,7 @@ export async function DELETE(
   try {
     const { id } = await context.params;
     const { client } = await authedClient(req);
-    const service = createServiceClient();
+    const service = await createServiceClient();
 
     // Fetch entry (legacy single-photo support)
     const { data: entry, error: entryError } = await client

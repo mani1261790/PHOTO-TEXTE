@@ -4,7 +4,7 @@ import { badRequest } from '@/lib/api/errors';
 import { parseJson } from '@/lib/api/parse';
 import { handleApiError, ok } from '@/lib/api/response';
 import { createEntrySchema } from '@/lib/api/schemas';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 export async function POST(req: NextRequest) {
   try {
