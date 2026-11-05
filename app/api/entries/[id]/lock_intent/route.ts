@@ -7,7 +7,7 @@ import { handleApiError, ok } from '@/lib/api/response';
 import { lockIntentSchema } from '@/lib/api/schemas';
 import { assertIntentLockable } from '@/lib/entries/state';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 export async function POST(
   req: NextRequest,

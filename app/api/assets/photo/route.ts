@@ -7,7 +7,7 @@ import { handleApiError, ok } from '@/lib/api/response';
 import { sanitizePhoto } from '@/lib/image/sanitize';
 import { assertRateLimit } from '@/lib/rate-limit/memory';
 import { photoBucket } from '@/lib/storage/buckets';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 

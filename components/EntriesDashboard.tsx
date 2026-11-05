@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
 import { DiffToken } from '@/lib/diff/read-only';
+import { EntryDiffComparison } from '@/components/EntryDiffComparison';
 import { useLanguage } from '@/components/LanguageProvider';
 
 const NEW_ENTRY_DRAFT_STORAGE_KEY = 'photo-texte:new-entry-draft:v1';
@@ -354,7 +355,7 @@ export function EntriesDashboard() {
 
       {error ? <p className="error">{error}</p> : null}
 
-      <div className="card">
+      <div className="card entries-list-shell">
         <div className="list-toolbar">
           <label>
             {t('検索', 'Recherche')}
@@ -456,25 +457,9 @@ export function EntriesDashboard() {
                                 ) : diffErrorByPhotoKey[`${entry.id}:${photo.id}`] ? (
                                   <p className="badge">{t('差分の取得に失敗しました。', 'Échec du chargement du diff.')}</p>
                                 ) : (
-                                  <pre className="diff-block">
-                                    {(diffByPhotoKey[`${entry.id}:${photo.id}`] ?? []).map((token, idx) => {
-                                      if (token.kind === 'add') {
-                                        return (
-                                          <span key={idx} className="diff-add">
-                                            +{token.value}
-                                          </span>
-                                        );
-                                      }
-                                      if (token.kind === 'remove') {
-                                        return (
-                                          <span key={idx} className="diff-remove">
-                                            -{token.value}
-                                          </span>
-                                        );
-                                      }
-                                      return <span key={idx}>{token.value}</span>;
-                                    })}
-                                  </pre>
+                                  <EntryDiffComparison
+                                    tokens={diffByPhotoKey[`${entry.id}:${photo.id}`] ?? []}
+                                  />
                                 )}
                               </div>
                             ) : null}

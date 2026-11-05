@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { apiFetch } from '@/lib/api/fetcher';
 import { getAccessToken } from '@/lib/auth/token-store';
@@ -56,12 +56,22 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }
   }, [language]);
 
+  const setLanguage = useCallback((next: ServiceLanguage) => {
+    setLanguageState(next);
+    if (!getAccessToken()) return;
+
+    void apiFetch<ProfileLanguage>('/api/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ service_language: next })
+    }).catch(() => undefined);
+  }, []);
+
   const value = useMemo(
     () => ({
       language,
-      setLanguage: (next: ServiceLanguage) => setLanguageState(next)
+      setLanguage
     }),
-    [language]
+    [language, setLanguage]
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

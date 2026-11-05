@@ -1,14 +1,20 @@
 import JSZip from 'jszip';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 
-import { buildPptxContentDisposition, buildPptxDownloadFilename } from '@/lib/pptx/download';
+import { buildExportContentDisposition, buildExportDownloadFilename } from '@/lib/exports/download';
+import { emptyCorrectionAnnotations } from '@/lib/learning/annotations';
+import { generatePhotoTextePdf } from '@/lib/pdf/generator';
 import { generatePhotoTextePptx } from '@/lib/pptx/generator';
 
 describe('pptx export privacy', () => {
   it('builds the PPTX download filename from the entry title', () => {
-    expect(buildPptxDownloadFilename('Mon titre')).toBe('Mon titre.pptx');
-    expect(buildPptxDownloadFilename('Bonjour / Paris: été')).toBe('Bonjour Paris été.pptx');
-    expect(buildPptxContentDisposition('Bonjour / Paris: été')).toContain("filename*=UTF-8''Bonjour%20Paris%20%C3%A9t%C3%A9.pptx");
+    expect(buildExportDownloadFilename('Mon titre', 'pptx')).toBe('Mon titre.pptx');
+    expect(buildExportDownloadFilename('Mon titre', 'pdf')).toBe('Mon titre.pdf');
+    expect(buildExportDownloadFilename('Bonjour / Paris: été', 'pptx')).toBe('Bonjour Paris été.pptx');
+    expect(buildExportContentDisposition('Bonjour / Paris: été', 'pdf')).toContain("filename*=UTF-8''Bonjour%20Paris%20%C3%A9t%C3%A9.pdf");
   });
 
   it('does not contain email or display name metadata in slides', async () => {
@@ -64,7 +70,7 @@ describe('pptx export privacy', () => {
     );
 
     const etape5Slide = slides.find((slide) =>
-      slide.xml.includes('étape 5. Comparaison (photo 1)')
+      slide.xml.includes('Étape 5. Comparaison (photo 1)')
     );
 
     expect(etape5Slide?.xml).toContain('Texte initial (FR)');
@@ -104,10 +110,10 @@ describe('pptx export privacy', () => {
     );
 
     const etape3Slide = slides.find((slide) =>
-      slide.xml.includes('étape 3. Mon texte photo 1 en français')
+      slide.xml.includes('Étape 3. Mon texte de la photo 1 en français')
     );
     const learningSlide = slides.find((slide) =>
-      slide.xml.includes('Qu’est-ce que j’ai appris avec ce Mon titre ?')
+      slide.xml.includes('Qu’est-ce que j’ai appris grâce au projet « Mon titre » ?')
     );
 
     expect(etape3Slide?.xml).toContain('<a:normAutofit/>');
@@ -117,4 +123,79 @@ describe('pptx export privacy', () => {
     expect(learningSlide?.xml).toContain('<a:normAutofit/>');
     expect(learningSlide?.xml).toContain('organiser mon texte avec plus de nuances');
   });
+
+  it('exports the new manual colors and an independent known-range box', async () => {
+    const finalFr = 'Je visite calmement un parc.';
+    const annotations = emptyCorrectionAnnotations(finalFr);
+    annotations.highlights = [
+      { start: finalFr.indexOf('visite'), end: finalFr.indexOf('visite') + 'visite'.length, kind: 'useful_verb' },
+      { start: finalFr.indexOf('parc'), end: finalFr.indexOf('parc') + 'parc'.length, kind: 'useful_word' },
+      { start: finalFr.indexOf('calmement'), end: finalFr.indexOf('calmement') + 'calmement'.length, kind: 'grammar' },
+    ];
+    annotations.knownRanges = [{ start: 0, end: finalFr.indexOf('calmement') + 'calmement'.length }];
+
+    const buffer = await generatePhotoTextePptx({
+      titleFr: 'Mon titre',
+      photos: [{
+        position: 1,
+        draftFr: 'Je visite un parc.',
+        jpAuto: '私は公園を訪れます。',
+        jpIntent: '私は静かに公園を訪れます。',
+        finalFr,
+        annotations,
+      }],
+    });
+
+    const zip = await JSZip.loadAsync(buffer);
+    const slideXml = (
+      await Promise.all(
+        Object.keys(zip.files)
+          .filter((name) => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'))
+          .map((name) => zip.file(name)!.async('string')),
+      )
+    ).join('\n');
+
+    expect(slideXml).toContain('BBF7D0');
+    expect(slideXml).toContain('FED7AA');
+    expect(slideXml).toContain('FEF08A');
+    expect(slideXml).toContain('Noms et adjectifs utiles');
+    expect(slideXml).toContain('Ce que je connais');
+    expect(slideXml).not.toContain('F8BBD0');
+    expect(slideXml).not.toContain('B2EBF2');
+  });
+
+  it('generates PDF pages with the same 16:9 size and page count as the PPTX', async () => {
+    const japaneseFont = await readFile(path.join(
+      process.cwd(),
+      'node_modules/@expo-google-fonts/noto-sans-jp/400Regular/NotoSansJP_400Regular.ttf'
+    ));
+    const input = {
+      titleFr: 'Mon titre',
+      displayName: 'Alice',
+      photos: [{
+        position: 1,
+        draftFr: 'Je visite un parc.',
+        jpAuto: '私は公園を訪れます。',
+        jpIntent: '私は静かに公園を訪れます。',
+        finalFr: 'Je visite calmement un parc.',
+      }],
+      learningBullets: ['J’ai appris une expression utile.'],
+    };
+
+    const [pptxBuffer, pdfBuffer] = await Promise.all([
+      generatePhotoTextePptx(input),
+      generatePhotoTextePdf(input, japaneseFont),
+    ]);
+    const pptxZip = await JSZip.loadAsync(pptxBuffer);
+    const pptxSlideCount = Object.keys(pptxZip.files).filter(
+      (name) => name.startsWith('ppt/slides/slide') && name.endsWith('.xml'),
+    ).length;
+    const pdf = await PDFDocument.load(pdfBuffer);
+
+    expect(pdf.getPageCount()).toBe(pptxSlideCount);
+    expect(pdf.getPageCount()).toBe(8);
+    expect(pdf.getPage(0).getWidth()).toBeCloseTo(13.333 * 72, 1);
+    expect(pdf.getPage(0).getHeight()).toBeCloseTo(7.5 * 72, 1);
+    expect(pdfBuffer.subarray(0, 5).toString()).toBe('%PDF-');
+  }, 20_000);
 });

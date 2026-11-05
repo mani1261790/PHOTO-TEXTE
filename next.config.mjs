@@ -1,5 +1,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
+
+await initOpenNextCloudflareForDev();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

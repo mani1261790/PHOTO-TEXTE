@@ -2,97 +2,29 @@ import path from "node:path";
 
 import PptxGenJS from "pptxgenjs";
 
-import { buildLearningHighlightsFromDiff, LearningHighlights, normalizeLearningWord } from "@/lib/learning/highlight";
+import {
+  PresentationExportInput,
+  PresentationPhotoInput,
+  annotationColors,
+  cleanLinesToBullets,
+  computePhotoGrid as computeGrid,
+  fitPresentationText as fitText,
+  layoutAnnotatedPlacements,
+  presentationLayout as layout,
+} from "@/lib/exports/presentation";
+import {
+  CorrectionAnnotations,
+  emptyCorrectionAnnotations,
+  normalizeCorrectionAnnotations,
+} from "@/lib/learning/annotations";
 
-export interface PptxPhotoInput extends Partial<LearningHighlights> {
-  position: number; // 1-based
-  draftFr: string;
-  jpAuto: string;
-  jpIntent: string;
-  finalFr: string;
-  /**
-   * A data URL such as:
-   * - data:image/jpeg;base64,...
-   * - data:image/png;base64,...
-   */
-  photoBase64?: string;
-}
-
-export interface PptxExportInput {
-  titleFr: string;
-  displayName?: string;
-  photos: PptxPhotoInput[];
-  /**
-   * SELF_NOTE memo content lines.
-   * These will be rendered as bullet points on the last slide.
-   */
-  learningBullets?: string[];
-}
-
-/**
- * Widescreen (13.333 x 7.5 in) layout coordinates for pptxgenjs with LAYOUT_WIDE.
- */
-const layout = {
-  // Common
-  title: { x: 0.5, y: 0.25, w: 12.3, h: 0.65 },
-  textPad: 0.18,
-
-  // Two-column slides
-  leftCol: { x: 0.6, y: 1.2, w: 5.9, h: 5.8 },
-  rightCol: { x: 6.8, y: 1.2, w: 5.9, h: 5.8 },
-  rightTop: { x: 6.8, y: 1.2, w: 5.9, h: 2.75 },
-  rightBottom: { x: 6.8, y: 4.25, w: 5.9, h: 2.75 },
-
-  // étape 5 slide
-  etape5Text: { x: 0.6, y: 1.2, w: 12.1, h: 4.9 },
-  etape5Legend: { x: 0.8, y: 6.2, w: 11.8, h: 1.0 },
-
-  // Learning slide
-  learningHeader: { x: 0.6, y: 0.25, w: 12.2, h: 0.8 },
-  learningBody: { x: 1.2, y: 1.6, w: 11.4, h: 5.6 },
-};
-
-function cleanLinesToBullets(input: string[]): string[] {
-  const out: string[] = [];
-  for (const raw of input) {
-    const s = (raw ?? "").trim();
-    if (!s) continue;
-    // Split multi-line memo content into bullets too.
-    const parts = s
-      .split(/\r?\n/)
-      .map((p) => p.trim())
-      .filter(Boolean);
-    for (const p of parts) {
-      // Strip leading bullet-ish markers
-      out.push(p.replace(/^[-*•\u2022]+\s*/, ""));
-    }
-  }
-  return out.slice(0, 18); // keep slide readable
-}
-
-function fitText(
-  value: string,
-  baseSize: number,
-  maxChars: number,
-  minSize = 10,
-): { text: string; size: number } {
-  const clean = (value ?? "").trim();
-  const lineCount = Math.max(1, clean.split(/\r?\n/).length);
-  const effectiveLength = clean.length + (lineCount - 1) * Math.round(maxChars * 0.35);
-
-  if (effectiveLength <= maxChars) {
-    return { text: clean || " ", size: baseSize };
-  }
-
-  const ratio = maxChars / effectiveLength;
-  const computed = Math.max(minSize, Math.floor(baseSize * ratio));
-  return { text: clean || " ", size: computed };
-}
+export type PptxPhotoInput = PresentationPhotoInput;
+export type PptxExportInput = PresentationExportInput;
 
 function addSlideTitle(slide: PptxGenJS.Slide, value: string) {
   slide.addText(value, {
     ...layout.title,
-    fontFace: "Aptos Display",
+    fontFace: "Arial",
     fontSize: 24,
     bold: true,
     color: "0F172A",
@@ -112,7 +44,7 @@ function addHeading(
     y,
     w,
     h,
-    fontFace: "Aptos",
+    fontFace: "Arial",
     fontSize: 12,
     bold: true,
     color: "334155",
@@ -126,6 +58,7 @@ function addTextPanel(
   content: string,
   maxChars: number,
 ) {
+  addPhotoBox(slide, area);
   addHeading(
     slide,
     area.x + layout.textPad,
@@ -141,10 +74,7 @@ function addTextPanel(
     y: area.y + 0.45,
     w: area.w - layout.textPad * 2,
     h: area.h - 0.55,
-    fontFace:
-      heading.includes("japonais") || heading.includes("(JP)")
-        ? "Yu Gothic"
-        : "Aptos",
+    fontFace: "Arial",
     fontSize: fitted.size,
     fit: "shrink",
     valign: "top",
@@ -180,7 +110,7 @@ function addPhotoOrPlaceholder(
       w: area.w - 0.4,
       h: 0.3,
       align: "center",
-      fontFace: "Aptos",
+      fontFace: "Arial",
       fontSize: 14,
       color: "64748B",
     });
@@ -215,7 +145,7 @@ function addTitlePage(pptx: PptxGenJS, titleFr: string, displayName?: string) {
     w: 12,
     h: 1.2,
     align: "center",
-    fontFace: "Aptos Display",
+    fontFace: "Arial",
     fontSize: 42,
     bold: true,
     color: "0F172A",
@@ -227,7 +157,7 @@ function addTitlePage(pptx: PptxGenJS, titleFr: string, displayName?: string) {
     w: 12,
     h: 0.4,
     align: "center",
-    fontFace: "Aptos",
+    fontFace: "Arial",
     fontSize: 14,
     color: "64748B",
   });
@@ -240,25 +170,11 @@ function addTitlePage(pptx: PptxGenJS, titleFr: string, displayName?: string) {
       w: 6,
       h: 0.35,
       align: "left",
-      fontFace: "Aptos",
+      fontFace: "Arial",
       fontSize: 14,
       color: "334155",
     });
   }
-}
-
-function computeGrid(n: number): { cols: number; rows: number } {
-  // Ensure it fits on the slide. For up to 10:
-  // 1-3: 3x1 (visually nice)
-  // 4: 2x2
-  // 5-6: 3x2
-  // 7-9: 3x3
-  // 10: 5x2
-  if (n <= 3) return { cols: 3, rows: 1 };
-  if (n === 4) return { cols: 2, rows: 2 };
-  if (n <= 6) return { cols: 3, rows: 2 };
-  if (n <= 9) return { cols: 3, rows: 3 };
-  return { cols: 5, rows: 2 };
 }
 
 function addPhotosGridSlide(
@@ -270,9 +186,10 @@ function addPhotosGridSlide(
   s.background = { color: "F8FAFC" };
 
   const n = photos.length;
+  const noun = n === 1 ? "photo" : "photos";
   addSlideTitle(
     s,
-    `étape 1 : ${n} photos pour ${titleFr?.trim() || "PHOTO-TEXTE"}`,
+    `Étape 1 : ${n} ${noun} pour ${titleFr?.trim() || "PHOTO-TEXTE"}`,
   );
 
   const { cols, rows } = computeGrid(n);
@@ -311,7 +228,7 @@ function addPhotosGridSlide(
       y: y + 0.12,
       w: 0.97,
       h: 0.24,
-      fontFace: "Aptos",
+      fontFace: "Arial",
       fontSize: 11,
       bold: true,
       color: "0F172A",
@@ -324,7 +241,7 @@ function addEtape1PhotoTextSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
   s.background = { color: "F8FAFC" };
   addSlideTitle(
     s,
-    `étape1. Ma photo ${photo.position} et quelques mots en français`,
+    `Étape 1. Ma photo ${photo.position} et quelques mots en français`,
   );
   addPhotoOrPlaceholder(s, layout.leftCol, photo.photoBase64);
   addTextPanel(s, layout.rightCol, "Texte initial (FR)", photo.draftFr, 1600);
@@ -333,7 +250,7 @@ function addEtape1PhotoTextSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
 function addEtape2JapaneseSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
   const s = pptx.addSlide();
   s.background = { color: "F8FAFC" };
-  addSlideTitle(s, `étape 2. Mon texte photo ${photo.position} en japonais`);
+  addSlideTitle(s, `Étape 2. Mon texte de la photo ${photo.position} en japonais`);
   addTextPanel(
     s,
     layout.leftCol,
@@ -347,7 +264,7 @@ function addEtape2JapaneseSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
 function addEtape3FrenchSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
   const s = pptx.addSlide();
   s.background = { color: "F8FAFC" };
-  addSlideTitle(s, `étape 3. Mon texte photo ${photo.position} en français`);
+  addSlideTitle(s, `Étape 3. Mon texte de la photo ${photo.position} en français`);
   addTextPanel(s, layout.leftCol, "Texte initial (FR)", photo.draftFr, 1600);
   addTextPanel(s, layout.rightCol, "Texte final (FR)", photo.finalFr, 1600);
 }
@@ -357,62 +274,155 @@ function addEtape4FinalSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
   s.background = { color: "F8FAFC" };
   addSlideTitle(
     s,
-    `étape 4. Ma photo et mon texte photo ${photo.position} final en français`,
+    `Étape 4. Ma photo et mon texte final en français - photo ${photo.position}`,
   );
   addPhotoOrPlaceholder(s, layout.leftCol, photo.photoBase64);
   addTextPanel(s, layout.rightCol, "Texte final (FR)", photo.finalFr, 1600);
 }
+function addAnnotatedTextPanel(
+  slide: PptxGenJS.Slide,
+  area: { x: number; y: number; w: number; h: number },
+  heading: string,
+  text: string,
+  input: CorrectionAnnotations | undefined,
+) {
+  addPhotoBox(slide, area);
+  addHeading(
+    slide,
+    area.x + layout.textPad,
+    area.y + 0.12,
+    area.w - layout.textPad * 2,
+    0.28,
+    heading,
+  );
 
+  const annotations = normalizeCorrectionAnnotations(
+    input ?? emptyCorrectionAnnotations(text),
+    text,
+  );
+  if (!annotations.highlights.length && !annotations.knownRanges.length) {
+    const fitted = fitText(text, 16, 1050, 8);
+    slide.addText(fitted.text, {
+      x: area.x + layout.textPad,
+      y: area.y + 0.45,
+      w: area.w - layout.textPad * 2,
+      h: area.h - 0.55,
+      fontFace: "Arial",
+      fontSize: fitted.size,
+      fit: "shrink",
+      color: "0F172A",
+      valign: "top",
+    });
+    return;
+  }
 
+  const content = {
+    x: area.x + layout.textPad,
+    y: area.y + 0.5,
+    w: area.w - layout.textPad * 2,
+    h: area.h - 0.65,
+  };
+  let fontSize = fitText(text, 16, 1050, 6).size;
+  let measured = layoutAnnotatedPlacements(text, annotations, content.w, fontSize);
+  while (fontSize > 4.5 && measured.height > content.h) {
+    fontSize -= 0.5;
+    measured = layoutAnnotatedPlacements(text, annotations, content.w, fontSize);
+  }
 
-function tokenizeWithWhitespace(text: string): string[] {
-  return text.split(/(\s+)/g).filter((x) => x.length > 0);
+  for (const placement of measured.placements) {
+    if (!placement.highlight) continue;
+    slide.addShape("rect", {
+      x: content.x + placement.x - 0.015,
+      y: content.y + placement.y + placement.h * 0.12,
+      w: placement.w + 0.03,
+      h: placement.h * 0.76,
+      line: { color: annotationColors[placement.highlight], transparency: 100 },
+      fill: { color: annotationColors[placement.highlight] },
+    });
+  }
+
+  for (let knownIndex = 0; knownIndex < annotations.knownRanges.length; knownIndex += 1) {
+    const knownPlacements = measured.placements.filter(
+      (placement) => placement.knownRangeIndex === knownIndex,
+    );
+    const lines = [...new Set(knownPlacements.map((placement) => placement.line))];
+    for (const line of lines) {
+      const linePlacements = knownPlacements.filter((placement) => placement.line === line);
+      if (!linePlacements.length) continue;
+      const first = linePlacements[0];
+      const last = linePlacements[linePlacements.length - 1];
+      slide.addShape("roundRect", {
+        x: content.x + first.x - 0.045,
+        y: content.y + first.y + 0.01,
+        w: last.x + last.w - first.x + 0.09,
+        h: first.h * 0.94,
+        rectRadius: 0.04,
+        line: { color: "334155", pt: 1.4 },
+        fill: { color: "FFFFFF", transparency: 100 },
+      });
+    }
+  }
+
+  for (const placement of measured.placements) {
+    slide.addText(placement.text, {
+      x: content.x + placement.x,
+      y: content.y + placement.y,
+      w: placement.w + 0.03,
+      h: placement.h,
+      margin: 0,
+      breakLine: false,
+      fontFace: "Arial",
+      fontSize,
+      color: "0F172A",
+      valign: "middle",
+    });
+  }
 }
 
-function buildHighlightedRuns(photo: PptxPhotoInput): PptxGenJS.TextProps[] {
-  const effectiveHighlights = buildLearningHighlightsFromDiff(
-    photo.draftFr ?? "",
-    photo.finalFr ?? "",
-    {
-      knownWords: photo.knownWords ?? [],
-      unknownWords: photo.unknownWords ?? [],
-      grammarWords: photo.grammarWords ?? [],
-      tokenSignature: photo.tokenSignature,
-      wordClassByKey: photo.wordClassByKey,
-    },
-  );
-  const known = new Set((effectiveHighlights.knownWords ?? []).map((w) => normalizeLearningWord(w)));
-  const unknown = new Set((effectiveHighlights.unknownWords ?? []).map((w) => normalizeLearningWord(w)));
-  const grammar = new Set((effectiveHighlights.grammarWords ?? []).map((w) => normalizeLearningWord(w)));
-
-  return tokenizeWithWhitespace(photo.finalFr ?? "").map((token) => {
-    const key = normalizeLearningWord(token);
-    let highlight: string | undefined;
-
-    if (key && grammar.has(key)) highlight = "FFF59D";
-    else if (key && known.has(key)) highlight = "F8BBD0";
-    else if (key && unknown.has(key)) highlight = "B2EBF2";
-
-    return {
-      text: token,
-      options: {
-        bold: false,
-        highlight,
-      },
-    };
+function addAnnotationLegend(slide: PptxGenJS.Slide) {
+  const items = [
+    { label: "Noms et adjectifs utiles", color: annotationColors.useful_word },
+    { label: "Verbes utiles", color: annotationColors.useful_verb },
+    { label: "Autres points de grammaire", color: annotationColors.grammar },
+    { label: "Ce que je connais", color: null },
+  ];
+  const itemWidth = 2.92;
+  items.forEach((item, index) => {
+    const x = layout.etape5Legend.x + index * itemWidth;
+    slide.addShape("roundRect", {
+      x,
+      y: layout.etape5Legend.y + 0.12,
+      w: 0.42,
+      h: 0.3,
+      rectRadius: 0.04,
+      line: item.color
+        ? { color: item.color, transparency: 100 }
+        : { color: "334155", pt: 1.4 },
+      fill: item.color
+        ? { color: item.color }
+        : { color: "FFFFFF", transparency: 100 },
+    });
+    slide.addText(item.label, {
+      x: x + 0.5,
+      y: layout.etape5Legend.y + 0.1,
+      w: itemWidth - 0.55,
+      h: 0.34,
+      margin: 0,
+      fontFace: "Arial",
+      fontSize: 10.5,
+      color: "334155",
+      valign: "middle",
+    });
   });
 }
 
 function addEtape5ComparisonSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
   const s = pptx.addSlide();
   s.background = { color: "F8FAFC" };
-  addSlideTitle(s, `étape 5. Comparaison (photo ${photo.position})`);
+  addSlideTitle(s, `Étape 5. Comparaison (photo ${photo.position})`);
 
   const draftArea = { x: 0.6, y: 1.2, w: 5.85, h: 4.6 };
   const finalArea = { x: 6.85, y: 1.2, w: 5.85, h: 4.6 };
-
-  addPhotoBox(s, draftArea);
-  addPhotoBox(s, finalArea);
 
   addTextPanel(
     s,
@@ -422,67 +432,23 @@ function addEtape5ComparisonSlide(pptx: PptxGenJS, photo: PptxPhotoInput) {
     1050,
   );
 
-  const fittedFinal = fitText(photo.finalFr, 16, 1050, 10);
-  s.addText(buildHighlightedRuns(photo), {
-    x: finalArea.x + layout.textPad,
-    y: finalArea.y + 0.45,
-    w: finalArea.w - layout.textPad * 2,
-    h: finalArea.h - 0.55,
-    fontFace: "Aptos",
-    fontSize: fittedFinal.size,
-    fit: "shrink",
-    color: "0F172A",
-    valign: "top",
-  });
-
-  addHeading(
+  addAnnotatedTextPanel(
     s,
-    finalArea.x + layout.textPad,
-    finalArea.y + 0.12,
-    finalArea.w - layout.textPad * 2,
-    0.28,
+    finalArea,
     "Texte corrigé (FR)",
+    photo.finalFr,
+    photo.annotations,
   );
 
   s.addShape("roundRect", {
     x: 0.6,
     y: 6.0,
     w: 12.1,
-    h: 1.2,
+    h: 0.78,
     line: { color: "CBD5E1", pt: 1 },
     fill: { color: "FFFFFF" },
   });
-
-  s.addText("Je souligne la grammaire en jaune", {
-    x: layout.etape5Legend.x,
-    y: layout.etape5Legend.y,
-    w: layout.etape5Legend.w,
-    h: 0.28,
-    fontFace: "Aptos",
-    fontSize: 14,
-    color: "0F172A",
-    highlight: "FFF59D",
-  });
-  s.addText("Je souligne les mots que je connais en rose", {
-    x: layout.etape5Legend.x,
-    y: layout.etape5Legend.y + 0.32,
-    w: layout.etape5Legend.w,
-    h: 0.28,
-    fontFace: "Aptos",
-    fontSize: 14,
-    color: "0F172A",
-    highlight: "F8BBD0",
-  });
-  s.addText("Je souligne les mots utiles, que je ne connais pas, en bleu", {
-    x: layout.etape5Legend.x,
-    y: layout.etape5Legend.y + 0.64,
-    w: layout.etape5Legend.w,
-    h: 0.28,
-    fontFace: "Aptos",
-    fontSize: 14,
-    color: "0F172A",
-    highlight: "B2EBF2",
-  });
+  addAnnotationLegend(s);
 }
 
 function addLearningSlide(pptx: PptxGenJS, titleFr: string, bullets: string[]) {
@@ -491,11 +457,11 @@ function addLearningSlide(pptx: PptxGenJS, titleFr: string, bullets: string[]) {
 
   // Header (multi-line)
   const header =
-    `Qu’est-ce que j’ai appris avec ce ${titleFr?.trim() || "PHOTO-TEXTE"} ?\n` +
+    `Qu’est-ce que j’ai appris grâce au projet « ${titleFr?.trim() || "PHOTO-TEXTE"} » ?\n` +
     `Quels nouveaux mots utiles ? Quelle grammaire utile ? Etc.`;
   s.addText(header, {
     ...layout.learningHeader,
-    fontFace: "Aptos Display",
+    fontFace: "Arial",
     fontSize: 22,
     bold: true,
     color: "0F172A",
@@ -504,7 +470,7 @@ function addLearningSlide(pptx: PptxGenJS, titleFr: string, bullets: string[]) {
   if (bullets.length === 0) {
     s.addText("•", {
       ...layout.learningBody,
-      fontFace: "Aptos",
+      fontFace: "Arial",
       fontSize: 22,
       fit: "shrink",
       color: "64748B",
@@ -518,7 +484,7 @@ function addLearningSlide(pptx: PptxGenJS, titleFr: string, bullets: string[]) {
   const fittedLearning = fitText(learningText, 22, 1100, 11);
   s.addText(fittedLearning.text, {
     ...layout.learningBody,
-    fontFace: "Aptos",
+    fontFace: "Arial",
     fontSize: fittedLearning.size,
     fit: "shrink",
     color: "0F172A",

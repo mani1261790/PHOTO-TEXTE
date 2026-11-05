@@ -1,11 +1,10 @@
-import { SupabaseClient } from '@supabase/supabase-js';
-
 import { rewriteJaToFr } from '@/lib/ai/client';
 import { badRequest } from '@/lib/api/errors';
+import { CloudflareClient } from '@/lib/cloudflare/client';
 import { assertRewritable } from '@/lib/entries/state';
 
 export async function runRewriteWorkflow(params: {
-  client: SupabaseClient;
+  client: CloudflareClient;
   userId: string;
   entryId: string;
 }) {

@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { badRequest } from '@/lib/api/errors';
 import { parseJson } from '@/lib/api/parse';
 import { handleApiError, ok } from '@/lib/api/response';
-import { authedClient } from '@/lib/supabase/authed';
+import { authedClient } from '@/lib/cloudflare/authed';
 import { z } from 'zod';
 
 const updateMemoSchema = z.object({
